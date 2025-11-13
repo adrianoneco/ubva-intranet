@@ -34,12 +34,12 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
 });
 
-export const insertTaskSchema = createInsertSchema(tasks).omit({
-  id: true,
-  createdAt: true,
-}).extend({
+export const insertTaskSchema = createInsertSchema(tasks, {
   description: z.string().optional(),
   categoryId: z.number().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
 });
 
 export type Category = typeof categories.$inferSelect;

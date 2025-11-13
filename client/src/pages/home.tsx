@@ -28,7 +28,7 @@ export default function Home() {
 
   const createTaskMutation = useMutation<Task, Error, InsertTask>({
     mutationFn: async (task: InsertTask) => {
-      return await apiRequest("POST", "/api/tasks", task) as Promise<Task>;
+      return await apiRequest("POST", "/api/tasks", task) as Task;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
@@ -49,7 +49,7 @@ export default function Home() {
 
   const toggleTaskMutation = useMutation<Task, Error, { id: number; completed: boolean }>({
     mutationFn: async ({ id, completed }) => {
-      return await apiRequest("PATCH", `/api/tasks/${id}`, { completed }) as Promise<Task>;
+      return await apiRequest("PATCH", `/api/tasks/${id}`, { completed }) as Task;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });

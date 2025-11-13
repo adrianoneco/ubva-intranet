@@ -31,7 +31,7 @@ export function TaskForm({ categories, onSubmit, isPending }: TaskFormProps) {
     resolver: zodResolver(insertTaskSchema),
     defaultValues: {
       title: "",
-      description: "",
+      description: undefined,
       completed: false,
       categoryId: undefined,
     },
