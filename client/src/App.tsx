@@ -9,10 +9,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
 
+import Landing from "@/pages/landing";
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/app" component={Home} />
+      <Route path="/" component={Landing} />
       <Route component={NotFound} />
     </Switch>
   );

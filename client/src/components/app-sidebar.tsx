@@ -14,13 +14,18 @@ import { Link, useLocation } from "wouter";
 
 const menuItems = [
   {
-    title: "Dashboard",
+    title: "Landing Page",
     url: "/",
+    icon: Home,
+  },
+  {
+    title: "Dashboard",
+    url: "/app",
     icon: LayoutDashboard,
   },
   {
     title: "All Tasks",
-    url: "/",
+    url: "/app",
     icon: FolderKanban,
   },
 ];

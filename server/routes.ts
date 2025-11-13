@@ -2,12 +2,26 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertTaskSchema, insertCategorySchema } from "@shared/schema";
+import { getCache, setCache, clearCachePattern } from "./redis";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Task routes
   app.get("/api/tasks", async (_req, res) => {
     try {
+      // Try to get from cache first
+      const cacheKey = "tasks:all";
+      const cachedTasks = await getCache(cacheKey);
+      
+      if (cachedTasks) {
+        return res.json(cachedTasks);
+      }
+
+      // If not in cache, get from database
       const tasks = await storage.getAllTasks();
+      
+      // Store in cache for 5 minutes
+      await setCache(cacheKey, tasks, 300);
+      
       res.json(tasks);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch tasks" });
@@ -34,6 +48,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid task data", details: result.error.errors });
       }
       const task = await storage.createTask(result.data);
+      
+      // Invalidate tasks cache
+      await clearCachePattern("tasks:*");
+      
       res.status(201).json(task);
     } catch (error) {
       res.status(500).json({ error: "Failed to create task" });
@@ -52,6 +70,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!task) {
         return res.status(404).json({ error: "Task not found" });
       }
+      
+      // Invalidate tasks cache
+      await clearCachePattern("tasks:*");
+      
       res.json(task);
     } catch (error) {
       res.status(500).json({ error: "Failed to update task" });
@@ -62,6 +84,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteTask(id);
+      
+      // Invalidate tasks cache
+      await clearCachePattern("tasks:*");
+      
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete task" });

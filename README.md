@@ -48,8 +48,9 @@ Um aplicativo completo de gerenciamento de tarefas demonstrando a arquitetura mo
 - **Express** - Framework web
 - **TypeScript** - Type safety
 - **Drizzle ORM** - Type-safe ORM
-- **PostgreSQL** - Banco de dados
-- **Neon** - PostgreSQL serverless
+- **PostgreSQL** - Banco de dados (driver nativo pg)
+- **Redis** - Cache em memória
+- **MinIO** - Object storage (S3-compatible)
 - **Zod** - Validação de requisições
 
 ### DevOps
@@ -63,8 +64,12 @@ Um aplicativo completo de gerenciamento de tarefas demonstrando a arquitetura mo
 # Instalar dependências
 npm install
 
+# Configurar variáveis de ambiente
+# Copiar .env.example para .env e ajustar os valores
+cp .env.example .env
+
 # Configurar banco de dados PostgreSQL
-# DATABASE_URL será automaticamente configurada no Replit
+# Editar DATABASE_URL no .env
 
 # Executar migrations
 npm run db:push
@@ -75,6 +80,18 @@ npx tsx server/seed.ts
 # Iniciar aplicação
 npm run dev
 ```
+
+## 🔧 Configuração
+
+### Variáveis de Ambiente Necessárias
+
+Veja `.env.example` para todas as variáveis disponíveis. As principais são:
+
+- `DATABASE_URL` - String de conexão PostgreSQL
+- `REDIS_HOST`, `REDIS_PORT` - Configuração do Redis (opcional)
+- `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` - Configuração do MinIO (opcional)
+
+**Nota**: Redis e MinIO são opcionais. Se não configurados, a aplicação funciona normalmente mas sem cache e storage de arquivos.
 
 ## 🎯 Funcionalidades
 
@@ -215,18 +232,54 @@ A aplicação foi testada end-to-end com Playwright:
 - Loading states otimistas
 - HMR com Vite
 
+## 🎯 Recursos Implementados
+
+### Cache com Redis
+```typescript
+// Exemplo de uso em server/routes.ts
+const cachedTasks = await getCache("tasks:all");
+if (cachedTasks) return res.json(cachedTasks);
+
+const tasks = await storage.getAllTasks();
+await setCache("tasks:all", tasks, 300); // TTL: 5 minutos
+```
+
+### Storage com MinIO
+```typescript
+// Exemplo de upload de arquivo
+import { uploadFile, getPresignedUrl } from "./minio";
+
+const url = await uploadFile(
+  "task-attachment.pdf",
+  fileBuffer,
+  "application/pdf"
+);
+```
+
+### PostgreSQL com Pool de Conexões
+```typescript
+// Configuração otimizada em server/db.ts
+export const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+```
+
 ## 🚀 Próximos Passos
 
 Funcionalidades sugeridas para expandir o projeto:
-- [ ] Autenticação de usuários
+- [ ] Upload de anexos em tarefas (usando MinIO)
+- [ ] Autenticação de usuários com sessões no Redis
 - [ ] Drag & drop para reordenar tarefas
 - [ ] Tags customizadas
-- [ ] Filtros avançados
+- [ ] Filtros avançados com cache
 - [ ] Exportação de dados
 - [ ] PWA com offline support
 - [ ] Testes unitários e integração
 - [ ] CI/CD pipeline
-- [ ] Docker containerization
+- [ ] Docker containerization com Redis e MinIO
 
 ## 📄 Licença
 
