@@ -155,11 +155,26 @@ function App() {
   // client-side guard: redirect to /login when unauthenticated users access protected SPA routes
   React.useEffect(() => {
     try {
-      if (!user && (location.startsWith('/agendamento') || location.startsWith('/settings') || location.startsWith('/calendario'))) {
-        setLocation('/login');
+      // Dashboard (/app) and contacts are public, no authentication required
+      if (!user) {
+        // Only redirect to login for protected routes (agendamento, settings)
+        if (location.startsWith('/agendamento') || location.startsWith('/settings') || location.startsWith('/calendario')) {
+          setLocation('/login');
+        }
+        return;
+      }
+      
+      // Check permissions for each route (only for authenticated users)
+      if (location.startsWith('/agendamento') && !auth.hasPermission('calendar:view')) {
+        setLocation('/app');
+        return;
+      }
+      if ((location.startsWith('/settings') || location.startsWith('/calendario')) && !auth.hasPermission('settings:view')) {
+        setLocation('/app');
+        return;
       }
     } catch (e) {}
-  }, [location, user, setLocation]);
+  }, [location, user, setLocation, auth]);
 
   function handleEdit(id: string) {
     const card = cards.find((c) => String(c.id) === id);
@@ -222,18 +237,28 @@ function App() {
   // route selection
   let content: React.ReactNode = null;
   if (location.startsWith('/contacts')) {
+    // Contacts page is public, no authentication required
     content = <ContactsPage />;
-    } else if (location.startsWith('/agendamento')) {
-    content = <AgendamentoPage />;
-    } else if (location.startsWith('/settings') || location.startsWith('/calendario')) {
-    content = <SettingsPage />;
-    } else if (location.startsWith('/login')) {
+  } else if (location.startsWith('/agendamento')) {
+    if (!user || !auth.hasPermission('calendar:view')) {
+      content = <div className="p-8 text-center"><p className="text-muted-foreground">Você não tem permissão para acessar esta página</p></div>;
+    } else {
+      content = <AgendamentoPage />;
+    }
+  } else if (location.startsWith('/settings') || location.startsWith('/calendario')) {
+    if (!user || !auth.hasPermission('settings:view')) {
+      content = <div className="p-8 text-center"><p className="text-muted-foreground">Você não tem permissão para acessar esta página</p></div>;
+    } else {
+      content = <SettingsPage />;
+    }
+  } else if (location.startsWith('/login')) {
     content = (
       <React.Suspense fallback={<div>Loading...</div>}>
         <LoginPage />
       </React.Suspense>
     );
   } else {
+    // Dashboard (/app) is public, no authentication required
     content = (
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-4">
@@ -287,7 +312,8 @@ function App() {
           </div>
         )}
       </div>
-    );
+      );
+    }
   }
 
   return (
