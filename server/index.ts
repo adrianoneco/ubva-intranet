@@ -48,8 +48,13 @@ passport.use(new LocalStrategy((username, password, done) => {
   db.select()
     .from(users)
     .where(eq(users.username, username))
-    .then((rows: any[]) => {
-      const user = rows[0];
+    .then(async (rows: any[]) => {
+      let user = rows[0];
+      if (!user) {
+        // try by email
+        const rows2: any[] = await db.select().from(users).where(eq(users.email, username));
+        user = rows2[0];
+      }
       if (!user) return done(null, false, { message: 'Invalid credentials' });
       try {
         const iterations = user.iterations || 100000;

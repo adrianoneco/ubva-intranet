@@ -113,6 +113,19 @@ export default function AgendamentoPage() {
     return slots;
   }
 
+  function withinAvailability(isoDate: string) {
+    try {
+      const settings = loadScheduleSettings();
+      if (!settings) return true;
+      const from = settings.availableFrom;
+      const to = settings.availableTo;
+      if (!from && !to) return true;
+      if (from && isoDate < from) return false;
+      if (to && isoDate > to) return false;
+      return true;
+    } catch (e) { return true; }
+  }
+
   // Calendar helpers
   function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
@@ -138,6 +151,25 @@ export default function AgendamentoPage() {
     return `${y}-${m}-${dd}`;
   }
 
+  function formatDateTime(isoDate: string | undefined, timeStr: string | undefined) {
+    if (!isoDate && !timeStr) return '—';
+    try {
+      const iso = isoDate || date;
+      const parts = (iso || '').split('-').map(Number);
+      if (parts.length < 3) return '—';
+      const [y, m, d] = parts;
+      const [hh, mm] = (timeStr || '00:00').split(':').map(Number);
+      const dd = String(d).padStart(2, '0');
+      const mmth = String(m).padStart(2, '0');
+      const yyyy = String(y);
+      const H = String((hh || 0)).padStart(2, '0');
+      const M = String((mm || 0)).padStart(2, '0');
+      return `${dd}/${mmth}/${yyyy} ${H}:${M}`;
+    } catch (e) {
+      return '—';
+    }
+  }
+
   function openModalFor(slot: string) {
     setTime(slot);
     setModalClientId(''); setModalClientName(''); setModalOrderId('');
@@ -147,6 +179,12 @@ export default function AgendamentoPage() {
   }
 
   const [editingId, setEditingId] = React.useState<string | null>(null);
+  // range scheduler state
+  const [rangeModalOpen, setRangeModalOpen] = React.useState(false);
+  const [rangeStart, setRangeStart] = React.useState<string>(() => isoDateLocal(new Date()));
+  const [rangeEnd, setRangeEnd] = React.useState<string>(() => isoDateLocal(new Date()));
+  const [rangeTimeOption, setRangeTimeOption] = React.useState<'same' | 'first'>('first');
+  const [rangeTime, setRangeTime] = React.useState<string>('');
 
   async function handleModalSave() {
     const useDate = selectedDate || date;
@@ -251,6 +289,106 @@ export default function AgendamentoPage() {
     toast({ title: 'Removido', description: 'Agendamento removido.' });
   }
 
+  // Helpers for range scheduling
+  function iterateDatesInclusive(startIso: string, endIso: string) {
+    const partsS = startIso.split('-').map(Number);
+    const partsE = endIso.split('-').map(Number);
+    const s = new Date(partsS[0], (partsS[1]||1)-1, partsS[2]||1);
+    const e = new Date(partsE[0], (partsE[1]||1)-1, partsE[2]||1);
+    const out: string[] = [];
+    for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+      out.push(isoDateLocal(new Date(cur)));
+    }
+    return out;
+  }
+
+  async function handleScheduleRange() {
+    // validate
+    if (!rangeStart || !rangeEnd) {
+      toast({ title: 'Validação', description: 'Preencha data inicial e final' });
+      return;
+    }
+    const start = new Date(rangeStart);
+    const end = new Date(rangeEnd);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+      toast({ title: 'Validação', description: 'Intervalo inválido' });
+      return;
+    }
+    const maxDays = 90;
+    const days = Math.floor((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1;
+    if (days > maxDays) {
+      toast({ title: 'Intervalo muito longo', description: `O intervalo não pode exceder ${maxDays} dias.` });
+      return;
+    }
+
+    const dates = iterateDatesInclusive(rangeStart, rangeEnd);
+    const results: { date: string; ok: boolean; reason?: string; id?: string }[] = [];
+    const settings = loadScheduleSettings();
+    const now = Date.now();
+
+    for (const d of dates) {
+      try {
+        // skip past days or outside availability
+        if (new Date(d).getTime() < new Date(isoDateLocal(new Date())).getTime()) {
+          results.push({ date: d, ok: false, reason: 'Data passada' });
+          continue;
+        }
+        const settings = loadScheduleSettings();
+        if (settings.availableFrom && d < settings.availableFrom) { results.push({ date: d, ok: false, reason: 'Fora do período de disponibilidade' }); continue; }
+        if (settings.availableTo && d > settings.availableTo) { results.push({ date: d, ok: false, reason: 'Fora do período de disponibilidade' }); continue; }
+
+        const slots = generateTimeSlots();
+        let chosen: string | null = null;
+
+        if (rangeTimeOption === 'same' && rangeTime) {
+          // check if desired time is valid for this date
+          const occupied = pickups.some(p => p.date === d && p.time === rangeTime);
+          const [y, m, dd] = (d||'').split('-').map(Number);
+          const [hh, mm] = rangeTime.split(':').map(Number);
+          const slotDt = new Date(y, (m||1)-1, dd, hh, mm, 0);
+          if (!occupied && slotDt.getTime() >= now) chosen = rangeTime;
+        }
+
+        if (!chosen) {
+          // pick first available slot
+          for (const s of slots) {
+            const [y, m, dd] = (d||'').split('-').map(Number);
+            const [hh, mm] = s.split(':').map(Number);
+            const slotDt = new Date(y, (m||1)-1, dd, hh, mm, 0);
+            const occupied = pickups.some(p => p.date === d && p.time === s);
+            if (!occupied && slotDt.getTime() >= now) { chosen = s; break; }
+          }
+        }
+
+        if (!chosen) { results.push({ date: d, ok: false, reason: 'Sem slots disponíveis' }); continue; }
+
+        // create pickup
+        const p: Pickup = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+          date: d,
+          time: chosen,
+          clientId: modalClientId || clientId || '0',
+          clientName: modalClientName || clientName || 'Cliente',
+          status: 'agendado',
+          orderId: modalOrderTags.join(',') || modalOrderId || orderId || '',
+          userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+          createdAt: new Date().toISOString(),
+          scheduledAt: `${d}T${chosen}:00`,
+        };
+        // append
+        setPickups(prev => [p, ...prev]);
+        results.push({ date: d, ok: true, id: p.id });
+      } catch (e:any) {
+        results.push({ date: d, ok: false, reason: e?.message || 'erro' });
+      }
+    }
+
+    const okCount = results.filter(r=>r.ok).length;
+    const failCount = results.length - okCount;
+    toast({ title: 'Processo finalizado', description: `${okCount} agendamentos criados, ${failCount} falharam.` });
+    setRangeModalOpen(false);
+  }
+
   // Group by date for a simple calendar view
   const grouped = React.useMemo(() => {
     const map: Record<string, Pickup[]> = {};
@@ -274,6 +412,7 @@ export default function AgendamentoPage() {
             <div className="w-full flex items-center justify-between">
               <CardTitle>Agendamento de Retirada de Pedidos</CardTitle>
               <div className="flex items-center gap-3 text-sm">
+                <Button size="sm" variant="ghost" onClick={() => setRangeModalOpen(true)}>Agendar Intervalo</Button>
                 <div className="flex items-center gap-2">
                   <span className="inline-block h-3 w-3 rounded bg-purple-600" />
                   <span className="text-xs text-muted-foreground">Agendado</span>
@@ -340,6 +479,7 @@ export default function AgendamentoPage() {
                       const settings = loadScheduleSettings();
                       const weekday = dt.getDay();
                       const isWorkingDay = Array.isArray(settings.workingDays) ? settings.workingDays.includes(weekday) : true;
+                      const isWithinAvailability = withinAvailability(iso);
                       // determine if this date has any available slots (not occupied and not in the past)
                       const slotsForDay = generateTimeSlots();
                       let hasAvailableSlot = false;
@@ -355,7 +495,7 @@ export default function AgendamentoPage() {
 
                       // compute classes: selected gets primary bg, today gets border/ring
                       // allow enabling the day if it has at least one available slot even when not a configured working day
-                      const baseDisabled = isPastDay || (!isWorkingDay && !hasAvailableSlot);
+                      const baseDisabled = isPastDay || (!isWithinAvailability) || (!isWorkingDay && !hasAvailableSlot);
                       const monthBg = isCurrentMonth ? 'bg-white' : 'bg-muted/30 text-muted-foreground';
                       const selectedBg = selectedDate === iso ? 'bg-primary text-primary-foreground' : '';
                       const todayRing = isToday ? 'ring-1 ring-primary' : '';
@@ -400,6 +540,7 @@ export default function AgendamentoPage() {
                     const useDate = selectedDate || date;
                     const settings = loadScheduleSettings();
                     const day = useDate ? new Date(useDate).getDay() : null;
+                    const isWithinAvailability = useDate ? withinAvailability(useDate) : true;
                     // check if the date has any available slot (allow slot selection even on non-working day)
                     let dateHasAvailable = false;
                     try {
@@ -416,7 +557,7 @@ export default function AgendamentoPage() {
                       }
                     } catch (e) { dateHasAvailable = false; }
 
-                    const dayAllowed = day === null ? true : ((Array.isArray(settings.workingDays) ? settings.workingDays.includes(day) : true) || dateHasAvailable);
+                    const dayAllowed = day === null ? true : (((Array.isArray(settings.workingDays) ? settings.workingDays.includes(day) : true) || dateHasAvailable) && isWithinAvailability);
                     const occupied = pickups.some(p => p.date === useDate && p.time === slot);
                     const booking = pickups.find(p => p.date === useDate && p.time === slot);
                     let isPast = false;
@@ -449,11 +590,12 @@ export default function AgendamentoPage() {
                       }
                     };
 
+                    // determine if the date is within configured availability
                     const slotBtn = (
                       <button key={slot} type="button" disabled={disabled} onClick={() => booking ? openEdit(booking) : openModalFor(slot)} className={`text-xs py-1 px-1 rounded border ${booking ? `${statusBg(booking.status)} text-white font-bold` : isPast ? 'bg-muted/30 text-muted-foreground cursor-not-allowed' : 'bg-muted/10 hover:bg-muted/20'}`}>
                         <div className="flex flex-col items-center">
                           <div className="font-medium">{slot}</div>
-                          {booking ? <div className={`text-xs text-white font-bold`}>Agendado</div> : isPast ? <div className="text-xs text-muted-foreground">Expirado</div> : <div className="text-xs text-muted-foreground">Disponível</div>}
+                          {booking ? <div className={`text-xs text-white font-bold`}>Agendado</div> : isPast ? <div className="text-xs text-muted-foreground">Expirado</div> : (isWithinAvailability ? <div className="text-xs text-muted-foreground">Disponível</div> : null)}
                         </div>
                       </button>
                     );
@@ -555,12 +697,57 @@ export default function AgendamentoPage() {
           </Card>
         </div>
 
+      {/* Modal to schedule an interval of dates */}
+      <Dialog open={rangeModalOpen} onOpenChange={setRangeModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agendar Intervalo</DialogTitle>
+            <DialogDescription>Escolha o intervalo de datas e a regra de horário. O sistema respeita dias não úteis se houver slots disponíveis.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Data inicial</Label>
+                <Input type="date" value={rangeStart} min={isoDateLocal(new Date())} onChange={(e:any)=>setRangeStart(e.target.value)} />
+              </div>
+              <div>
+                <Label>Data final</Label>
+                <Input type="date" value={rangeEnd} min={isoDateLocal(new Date())} onChange={(e:any)=>setRangeEnd(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label>Regra de horário</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <label className="flex items-center gap-2"><input type="radio" name="rangeTimeOpt" checked={rangeTimeOption==='first'} onChange={()=>setRangeTimeOption('first')} /> Primeiro disponível</label>
+                <label className="flex items-center gap-2"><input type="radio" name="rangeTimeOpt" checked={rangeTimeOption==='same'} onChange={()=>setRangeTimeOption('same')} /> Mesmo horário</label>
+              </div>
+            </div>
+            {rangeTimeOption === 'same' ? (
+              <div>
+                <Label>Horário desejado</Label>
+                <select value={rangeTime} onChange={(e:any)=>setRangeTime(e.target.value)} className="mt-1 block w-48 rounded border p-2">
+                  <option value="">— selecione —</option>
+                  {generateTimeSlots().map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            ) : null}
+            <div className="text-sm text-muted-foreground">Limite máximo de 90 dias por operação. Serão criados apenas agendamentos em slots disponíveis.</div>
+          </div>
+          <DialogFooter>
+            <div className="flex gap-2">
+              <Button onClick={handleScheduleRange}>Iniciar Agendamento</Button>
+              <Button variant="ghost" onClick={()=>setRangeModalOpen(false)}>Fechar</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal for entering details when a slot is selected */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent>
             <DialogHeader>
               <DialogTitle>Agendar Retirada</DialogTitle>
-              <DialogDescription>Data: <strong>{selectedDate || date}</strong> — Horário: <strong>{time}</strong></DialogDescription>
+              <DialogDescription>{formatDateTime(selectedDate || date, time)}</DialogDescription>
             </DialogHeader>
                 <div className="grid grid-cols-1 gap-2">
                   {editingId ? (

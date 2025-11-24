@@ -331,12 +331,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return passportAuth(req, res, next);
   });
 
-  app.post('/api/logout', (_req, res) => {
+  app.post('/api/logout', (req, res) => {
     try {
-      (_req as any).logout && (_req as any).logout();
-      (_req as any).session && (_req as any).session.destroy && (_req as any).session.destroy(() => {});
-    } catch (e) {}
-    return res.json({ ok: true });
+      // Passport >=0.6 may require callback for logout
+      const doDestroy = () => {
+        try {
+          if (req.session && typeof req.session.destroy === 'function') {
+            req.session.destroy(() => {
+              try { res.clearCookie('connect.sid'); } catch (e) {}
+              return res.json({ ok: true });
+            });
+            return;
+          }
+        } catch (e) {}
+        try { res.clearCookie('connect.sid'); } catch (e) {}
+        return res.json({ ok: true });
+      };
+
+      if (typeof (req as any).logout === 'function') {
+        // logout may accept a callback
+        try {
+          (req as any).logout((err: any) => {
+            // ignore error, proceed to destroy session
+            doDestroy();
+          });
+          return;
+        } catch (e) {
+          try { (req as any).logout(); } catch (e) {}
+          doDestroy();
+          return;
+        }
+      }
+
+      doDestroy();
+    } catch (e) {
+      try { res.clearCookie('connect.sid'); } catch (err) {}
+      return res.json({ ok: true });
+    }
   });
 
   // return current logged-in user (if any)
@@ -531,7 +562,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const password = decoded.slice(idx + 1);
           // find user in DB
           try {
-            const [row] = await db.select().from(users).where(eq(users.username, username));
+              let row: any = undefined;
+              const rows1 = await db.select().from(users).where(eq(users.username, username));
+              if (Array.isArray(rows1) && rows1.length) row = rows1[0];
+              if (!row) {
+                const rows2 = await db.select().from(users).where(eq(users.email, username));
+                if (Array.isArray(rows2) && rows2.length) row = rows2[0];
+              }
             if (row) {
               const iterations = row.iterations || 100000;
               const hash = crypto.pbkdf2Sync(password, row.salt, iterations, 64, 'sha512').toString('hex');
@@ -575,7 +612,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (idx > 0) {
             const username = decoded.slice(0, idx);
             const password = decoded.slice(idx + 1);
-            const [row] = await db.select().from(users).where(eq(users.username, username));
+            let row: any = undefined;
+            const rows1 = await db.select().from(users).where(eq(users.username, username));
+            if (Array.isArray(rows1) && rows1.length) row = rows1[0];
+            if (!row) {
+              const rows2 = await db.select().from(users).where(eq(users.email, username));
+              if (Array.isArray(rows2) && rows2.length) row = rows2[0];
+            }
             if (row) {
               const iterations = row.iterations || 100000;
               const hash = crypto.pbkdf2Sync(password, row.salt, iterations, 64, 'sha512').toString('hex');

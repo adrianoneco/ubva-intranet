@@ -13,6 +13,8 @@ type ScheduleSettings = {
   startTime: string; // HH:MM
   endTime: string; // HH:MM
   workingDays: number[]; // 0=Sun..6=Sat
+  availableFrom?: string; // ISO date yyyy-mm-dd
+  availableTo?: string; // ISO date yyyy-mm-dd
 };
 
 const STORAGE_KEY = 'schedule.settings.v1';
@@ -23,6 +25,8 @@ function defaultSettings(): ScheduleSettings {
     startTime: '08:00',
     endTime: '17:00',
     workingDays: [1,2,3,4,5],
+    availableFrom: undefined,
+    availableTo: undefined,
   };
 }
 
@@ -191,6 +195,23 @@ export default function SettingsPage() {
     const parts = (iso || '').split('-').map(Number);
     if (parts.length < 3 || parts.some(isNaN)) return new Date(iso);
     return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function formatDateTime(isoDate: string | undefined | null, timeStr: string | undefined | null) {
+    if (!isoDate && !timeStr) return '—';
+    try {
+      const iso = isoDate || '';
+      const parts = (iso || '').split('-').map(Number);
+      if (parts.length < 3 || parts.some(isNaN)) return '—';
+      const [y, m, d] = parts;
+      const [hh, mm] = (timeStr || '00:00').split(':').map(Number);
+      const dd = String(d).padStart(2, '0');
+      const mmth = String(m).padStart(2, '0');
+      const yyyy = String(y);
+      const H = String((hh || 0)).padStart(2, '0');
+      const M = String((mm || 0)).padStart(2, '0');
+      return `${dd}/${mmth}/${yyyy} ${H}:${M}`;
+    } catch (e) { return '—'; }
   }
 
   function isPastDateTime(isoDate: string, time: string) {
@@ -374,6 +395,17 @@ export default function SettingsPage() {
                           <Input type="time" value={settings.endTime} onChange={(e:any)=>setSettings(s=>({ ...s, endTime: e.target.value }))} />
                         </div>
                       </div>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>Disponibilidade - Início</Label>
+                          <Input type="date" value={settings.availableFrom || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableFrom: e.target.value || undefined }))} />
+                        </div>
+                        <div>
+                          <Label>Disponibilidade - Fim</Label>
+                          <Input type="date" value={settings.availableTo || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableTo: e.target.value || undefined }))} />
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-2">Se preenchido, o calendário só permitirá agendamentos dentro deste intervalo.</div>
 
                       <div>
                         <Label>Dias da semana</Label>
@@ -450,7 +482,7 @@ export default function SettingsPage() {
             <DialogHeader>
               <DialogTitle>Agendar Retirada</DialogTitle>
             </DialogHeader>
-            <div className="mb-2 text-sm text-muted-foreground">Data: {selectedDate || '—'} — Horário: {modalTime || '—'}</div>
+            <div className="mb-2 text-sm text-muted-foreground">{formatDateTime(selectedDate || null, modalTime || null)}</div>
             <div className="mb-2 grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-center">Data</Label>
