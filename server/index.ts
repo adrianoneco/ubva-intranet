@@ -59,11 +59,16 @@ passport.use(new LocalStrategy((username, password, done) => {
       try {
         const iterations = user.iterations || 100000;
         const hash = crypto.pbkdf2Sync(password, user.salt, iterations, 64, 'sha512').toString('hex');
-        if (hash === user.passwordHash) {
-          return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null });
+        console.log(`[LOGIN] User: ${user.username}, Email: ${user.email}, Hash match: ${hash === user.passwordHash || hash === user.password_hash}`);
+        // Check both camelCase and snake_case field names for compatibility
+        const storedHash = user.passwordHash || user.password_hash;
+        if (hash === storedHash) {
+          const permissions = user.permissions ? JSON.parse(user.permissions) : [];
+          return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
         }
         return done(null, false, { message: 'Invalid credentials' });
       } catch (e) {
+        console.error('[LOGIN] Error during password verification:', e);
         return done(e as any);
       }
     }).catch((err: any) => done(err));
@@ -74,7 +79,8 @@ passport.deserializeUser((id: any, done) => {
   db.select().from(users).where(eq(users.id, id)).then((rows: any[]) => {
     const user = rows[0];
     if (!user) return done(null, false);
-    return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null });
+    const permissions = user.permissions ? JSON.parse(user.permissions) : [];
+    return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
   }).catch((err: any) => done(err));
 });
 

@@ -448,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.permissions !== undefined) patch.permissions = JSON.stringify(Array.isArray(body.permissions) ? body.permissions : []);
       // allow password change
       if (body.password !== undefined) {
-        const newPw = String(body.password || '');
+        const newPw = String(body.password || '').trim();
         if (newPw && newPw.length > 0) {
           const newSalt = crypto.randomBytes(16).toString('hex');
           const iterations = 100000;
@@ -456,13 +456,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           patch.passwordHash = newHash;
           patch.salt = newSalt;
           patch.iterations = iterations;
+          console.log(`[USER UPDATE] Updating password for user ID ${id}`);
         } else {
           // if empty string provided, ignore (do not clear password)
         }
       }
       if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+      console.log(`[USER UPDATE] Patch object:`, Object.keys(patch));
       await db.update(users).set(patch).where(eq(users.id, id));
       const [row] = await db.select().from(users).where(eq(users.id, id));
+      console.log(`[USER UPDATE] Updated user ${row.username}, has passwordHash: ${!!row.passwordHash}`);
       return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.display_name, email: row.email, role: row.role, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
     } catch (e) {
       console.error('Failed to update user', e);

@@ -1,7 +1,13 @@
 import React from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
-type User = { username: string; displayName?: string | null; email?: string | null } | null;
+type User = { 
+  username: string; 
+  displayName?: string | null; 
+  email?: string | null;
+  role?: string;
+  permissions?: string[];
+} | null;
 
 type AuthContextValue = {
   user: User;
@@ -9,6 +15,7 @@ type AuthContextValue = {
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   refresh: () => Promise<User>;
+  hasPermission: (permission: string) => boolean;
 };
 
 const AuthContext = React.createContext<AuthContextValue | undefined>(undefined);
@@ -41,11 +48,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const login = React.useCallback(async (username: string, password: string) => {
-    const res = await apiRequest('POST', '/api/login', { username, password });
-    const data = await res.json();
-    setUser(data.user ?? null);
-    return data.user ?? null;
-  }, []);
+    try {
+      const res = await apiRequest('POST', '/api/login', { username, password });
+      const data = await res.json();
+      const userData = data.user ?? null;
+      setUser(userData);
+      setLoading(false);
+      // Force a refresh to ensure permissions are loaded
+      if (userData) {
+        await refresh();
+      }
+      return userData;
+    } catch (e) {
+      setLoading(false);
+      throw e;
+    }
+  }, [refresh]);
 
   const logout = React.useCallback(async () => {
     try {
@@ -54,7 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const value: AuthContextValue = React.useMemo(() => ({ user, loading, login, logout, refresh }), [user, loading, login, logout, refresh]);
+  const hasPermission = React.useCallback((permission: string) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    return user.permissions?.includes(permission) || false;
+  }, [user]);
+
+  const value: AuthContextValue = React.useMemo(() => ({ user, loading, login, logout, refresh, hasPermission }), [user, loading, login, logout, refresh, hasPermission]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

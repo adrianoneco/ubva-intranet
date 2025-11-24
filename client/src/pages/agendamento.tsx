@@ -407,7 +407,7 @@ export default function AgendamentoPage() {
   return (
     <div className="min-h-screen bg-background py-6">
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
-        <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
+        <Card className="bg-white/5 dark:bg-white/5 backdrop-blur-sm border border-white/10 dark:border-white/20">
           <CardHeader>
               <div className="w-full flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -422,7 +422,7 @@ export default function AgendamentoPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="inline-block h-3 w-3 rounded bg-lime-600" />
-                      <span className="text-xs text-muted-foreground">Confirmado</span>
+                      <span className="text-xs text-muted-foreground">Separado</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="inline-block h-3 w-3 rounded bg-emerald-600" />
@@ -500,10 +500,10 @@ export default function AgendamentoPage() {
                       // compute classes: selected gets primary bg, today gets border/ring
                       // allow enabling the day if it has at least one available slot even when not a configured working day
                       const baseDisabled = isPastDay || (!isWithinAvailability) || (!isWorkingDay && !hasAvailableSlot);
-                      const monthBg = isCurrentMonth ? 'bg-white' : 'bg-muted/30 text-muted-foreground';
+                      const monthBg = isCurrentMonth ? 'bg-white dark:bg-white/10' : 'bg-muted/30 dark:bg-muted/20 text-muted-foreground';
                       const selectedBg = selectedDate === iso ? 'bg-primary text-primary-foreground' : '';
                       const todayRing = isToday ? 'ring-2 ring-primary' : '';
-                      const disabledCls = baseDisabled ? 'bg-muted/30 text-muted-foreground cursor-not-allowed' : '';
+                      const disabledCls = baseDisabled ? 'bg-muted/30 dark:bg-muted/20 text-muted-foreground cursor-not-allowed' : '';
 
                       return (
                         <button
@@ -596,7 +596,7 @@ export default function AgendamentoPage() {
 
                     // determine if the date is within configured availability
                     const slotBtn = (
-                      <button key={slot} type="button" disabled={disabled} onClick={() => booking ? openEdit(booking) : openModalFor(slot)} className={`min-w-[90px] text-sm py-2 px-3 rounded-lg border ${booking ? `${statusBg(booking.status)} text-white font-bold` : isPast ? 'bg-muted/30 text-muted-foreground cursor-not-allowed' : 'bg-muted/10 hover:bg-muted/20'}`}>
+                      <button key={slot} type="button" disabled={disabled} onClick={() => booking ? openEdit(booking) : openModalFor(slot)} className={`min-w-[90px] text-sm py-2 px-3 rounded-lg border border-border dark:border-white/10 ${booking ? `${statusBg(booking.status)} text-white font-bold` : isPast ? 'bg-muted/30 dark:bg-muted/20 text-muted-foreground cursor-not-allowed' : 'bg-muted/10 dark:bg-white/5 hover:bg-muted/20 dark:hover:bg-white/10'}`}>
                         <div className="flex flex-col items-center">
                           <div className="font-medium">{slot}</div>
                           {booking ? <div className={`text-xs text-white font-bold`}>Agendado</div> : isPast ? <div className="text-xs text-muted-foreground">Expirado</div> : (isWithinAvailability ? <div className="text-xs text-muted-foreground">Disponível</div> : null)}
@@ -635,7 +635,7 @@ export default function AgendamentoPage() {
 
         {/* Separate card for existing bookings */}
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 mt-4">
-          <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
+          <Card className="bg-white/5 dark:bg-white/5 backdrop-blur-sm border border-white/10 dark:border-white/20">
             <CardHeader>
               <CardTitle>Agendamentos existentes</CardTitle>
             </CardHeader>
@@ -663,7 +663,7 @@ export default function AgendamentoPage() {
                           }
 
                           return (
-                            <div key={it.id} className={`group relative flex items-center justify-between bg-muted p-1 pl-4 rounded text-sm ${bookingIsExpired ? 'opacity-60' : ''}`}>
+                            <div key={it.id} className={`group relative flex items-center justify-between bg-muted dark:bg-white/5 p-1 pl-4 rounded text-sm border border-transparent dark:border-white/5 ${bookingIsExpired ? 'opacity-60' : ''}`}>
                               {/* left status indicator */}
                               {(() => {
                                 const s = it.status || 'agendado';

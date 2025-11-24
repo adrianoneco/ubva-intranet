@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Trash2, Edit3 } from 'lucide-react';
+import { Trash2, Edit3, Settings, Users } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
@@ -59,7 +59,7 @@ export default function SettingsPage() {
   const [modalOrderId, setModalOrderId] = React.useState('');
   const [modalTime, setModalTime] = React.useState('');
   const [modalStatus, setModalStatus] = React.useState<'agendado'|'confirmado'|'entregue'|'cancelado'>('agendado');
-  const [activeSection, setActiveSection] = React.useState<'agendamentos'|'usuarios'>('agendamentos');
+  const [activeSection, setActiveSection] = React.useState<'agendamentos'|'usuarios'|'grupos'>('agendamentos');
 
   // Users state for the new Usuarios tab
   type User = { id: string; name: string; email: string; role: string; permissions: string[] };
@@ -92,32 +92,35 @@ export default function SettingsPage() {
       // fallback to defaults if empty
       if (mounted && Array.isArray(data) && data.length === 0) {
         setGroups([
-          { id: 'admin', name: 'Admin', permissions: ['agendamento:create','agendamento:edit','agendamento:delete','users:manage','calendar:view','calendar:create','calendar:edit','calendar:delete'] },
-          { id: 'editor', name: 'Editor', permissions: ['agendamento:create','agendamento:edit','calendar:view','calendar:create','calendar:edit'] },
-          { id: 'viewer', name: 'Viewer', permissions: [] },
+          { id: 'admin', name: 'Admin', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','contacts:delete','calendar:view','calendar:create','calendar:edit','calendar:delete','settings:view','settings:edit','users:view','users:manage','groups:manage'] },
+          { id: 'editor', name: 'Editor', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','calendar:view','calendar:create','calendar:edit','settings:view'] },
+          { id: 'viewer', name: 'Viewer', permissions: ['dashboard:view','contacts:view','calendar:view'] },
         ]);
       }
     }).catch(() => {
       setGroups([
-        { id: 'admin', name: 'Admin', permissions: ['agendamento:create','agendamento:edit','agendamento:delete','users:manage','calendar:view','calendar:create','calendar:edit','calendar:delete'] },
-        { id: 'editor', name: 'Editor', permissions: ['agendamento:create','agendamento:edit','calendar:view','calendar:create','calendar:edit'] },
-        { id: 'viewer', name: 'Viewer', permissions: [] },
+        { id: 'admin', name: 'Admin', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','contacts:delete','calendar:view','calendar:create','calendar:edit','calendar:delete','settings:view','settings:edit','users:view','users:manage','groups:manage'] },
+        { id: 'editor', name: 'Editor', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','calendar:view','calendar:create','calendar:edit','settings:view'] },
+        { id: 'viewer', name: 'Viewer', permissions: ['dashboard:view','contacts:view','calendar:view'] },
       ]);
     });
     return () => { mounted = false; };
   }, []);
-  const [groupsModalOpen, setGroupsModalOpen] = React.useState(false);
   const [editingGroupId, setEditingGroupId] = React.useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = React.useState('');
   const [editingGroupPerms, setEditingGroupPerms] = React.useState<string[]>([]);
+  const [groupModalOpen, setGroupModalOpen] = React.useState(false);
 
-  function openGroupsModal() {
-    setEditingGroupId(null); setEditingGroupName(''); setEditingGroupPerms([]);
-    setGroupsModalOpen(true);
+  function startNewGroup() {
+    setEditingGroupId(null); setEditingGroupName(''); setEditingGroupPerms([]); setGroupModalOpen(true);
   }
 
   function openEditGroup(g: Group) {
-    setEditingGroupId(g.id); setEditingGroupName(g.name); setEditingGroupPerms(g.permissions || []); setGroupsModalOpen(true);
+    setEditingGroupId(g.id); setEditingGroupName(g.name); setEditingGroupPerms(g.permissions || []); setGroupModalOpen(true);
+  }
+
+  function cancelGroupEdit() {
+    setEditingGroupId(null); setEditingGroupName(''); setEditingGroupPerms([]); setGroupModalOpen(false);
   }
 
   function handleSaveGroup() {
@@ -137,10 +140,9 @@ export default function SettingsPage() {
           setGroups(prev => [{ id: data.group.id, name: data.group.name, permissions: data.group.permissions }, ...prev]);
           toast({ title: 'Grupo criado' });
         }
+        setEditingGroupId(null); setEditingGroupName(''); setEditingGroupPerms([]); setGroupModalOpen(false);
       } catch (e) {
         toast({ title: 'Erro', description: 'Não foi possível salvar o grupo' });
-      } finally {
-        setGroupsModalOpen(false);
       }
     })();
   }
@@ -289,21 +291,72 @@ export default function SettingsPage() {
     setUsersModalOpen(true);
   }
 
+  // Tab indicator refs and styles
+  const tabsRef = React.useRef<HTMLDivElement | null>(null);
+  const tabButtonsRef = React.useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicatorStyle, setIndicatorStyle] = React.useState<{ left: number; width: number }>({ left: 0, width: 0 });
+
+  React.useLayoutEffect(() => {
+    function update() {
+      const container = tabsRef.current;
+      const btn = tabButtonsRef.current[activeSection];
+      if (!container || !btn) return setIndicatorStyle({ left: 0, width: 0 });
+      const cRect = container.getBoundingClientRect();
+      const bRect = btn.getBoundingClientRect();
+      setIndicatorStyle({ left: bRect.left - cRect.left, width: bRect.width });
+    }
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [activeSection]);
+
+  // simple tab panel animation helper
+  function TabPanel({ children, id }: { children: React.ReactNode; id: string }) {
+    const [visible, setVisible] = React.useState(false);
+    const [currentId, setCurrentId] = React.useState(id);
+    
+    React.useEffect(() => {
+      // only trigger animation when id actually changes
+      if (currentId !== id) {
+        setCurrentId(id);
+        setVisible(false);
+        const t = setTimeout(() => setVisible(true), 10);
+        return () => clearTimeout(t);
+      } else if (!visible) {
+        // initial mount
+        const t = setTimeout(() => setVisible(true), 10);
+        return () => clearTimeout(t);
+      }
+    }, [id, currentId, visible]);
+    
+    return (
+      <div className={`transition-all duration-250 ease-in-out ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+        {children}
+      </div>
+    );
+  }
+
   function handleSaveUser() {
     if (!editingUserName || !editingUserEmail) { toast({ title: 'Validação', description: 'Preencha nome e email do usuário' }); return; }
     (async () => {
       try {
         if (editingUserId) {
           const payload: any = { displayName: editingUserName, email: editingUserEmail, role: editingUserRole, permissions: editingUserPerms };
-          if (editingUserPassword) payload.password = editingUserPassword;
+          const trimmedPassword = editingUserPassword.trim();
+          if (trimmedPassword.length > 0) {
+            payload.password = trimmedPassword;
+          }
           const res = await fetch(`/api/admin/users/${editingUserId}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           if (!res.ok) throw new Error('failed');
           const data = await res.json();
           setUsers(u => u.map(x => x.id === editingUserId ? ({ ...x, name: data.user.displayName || data.user.username, email: data.user.email || '', role: data.user.role, permissions: data.user.permissions || [] }) : x));
-          toast({ title: 'Atualizado' });
+          toast({ title: 'Atualizado', description: trimmedPassword.length > 0 ? 'Senha alterada com sucesso' : undefined });
         } else {
           const payload: any = { displayName: editingUserName, email: editingUserEmail, role: editingUserRole, permissions: editingUserPerms };
-          if (editingUserPassword) payload.password = editingUserPassword;
+          const trimmedPassword = editingUserPassword.trim();
+          if (trimmedPassword.length > 0) {
+            payload.password = trimmedPassword;
+          }
           const res = await fetch('/api/admin/users', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           if (!res.ok) throw new Error('failed');
           const data = await res.json();
@@ -356,124 +409,161 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background py-6">
       <div className="max-w-5xl mx-auto px-2 sm:px-4 lg:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <aside className="md:col-span-1">
-            <Card className="bg-white/3 backdrop-blur-sm border border-white/6">
-              <CardContent>
-                <div className="space-y-2">
-                  <button className={`w-full text-center p-2 rounded ${activeSection === 'agendamentos' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/20'}`} onClick={() => setActiveSection('agendamentos')}>Configurações</button>
-                  <button className={`w-full text-center p-2 rounded ${activeSection === 'usuarios' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/20'}`} onClick={() => setActiveSection('usuarios')}>Usuarios</button>
+          <div className="grid grid-cols-1 gap-4">
+            <main className="md:col-span-4">
+              <div className="mb-6">
+                <div className="relative border-b border-border dark:border-white/10" ref={tabsRef}>
+                  <div className="flex flex-wrap gap-1 relative z-10">
+                    <button ref={el => tabButtonsRef.current['agendamentos'] = el} className={`px-4 py-3 rounded-t-md transition-all text-sm font-medium flex items-center gap-2 ${activeSection === 'agendamentos' ? 'bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-white/5'}`} onClick={() => setActiveSection('agendamentos')}>
+                      <Settings className="h-4 w-4" />
+                      <span>Configurações</span>
+                    </button>
+                    <button ref={el => tabButtonsRef.current['usuarios'] = el} className={`px-4 py-3 rounded-t-md transition-all text-sm font-medium flex items-center gap-2 ${activeSection === 'usuarios' ? 'bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-white/5'}`} onClick={() => setActiveSection('usuarios')}>
+                      <Users className="h-4 w-4" />
+                      <span>Usuários</span>
+                    </button>
+                    <button ref={el => tabButtonsRef.current['grupos'] = el} className={`px-4 py-3 rounded-t-md transition-all text-sm font-medium flex items-center gap-2 ${activeSection === 'grupos' ? 'bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-white/5'}`} onClick={() => setActiveSection('grupos')}>
+                      <Settings className="h-4 w-4" />
+                      <span>Grupos</span>
+                    </button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </aside>
-
-          <main className="md:col-span-3">
-            {activeSection === 'agendamentos' ? (
-              <div className="space-y-4">
-                {/* Calendar settings card (previously 'Configurações do Calendário') */}
-                <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
-                  <CardHeader>
-                    <CardTitle>Agendamentos</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <Label>Intervalo (min)</Label>
-                        <select value={String(settings.interval)} onChange={(e)=>setSettings(s=>({ ...s, interval: Number(e.target.value)}))} className="mt-1 block w-32 rounded border p-2">
-                          {[5,10,15,30,60].map(n=> <option key={n} value={n}>{n} minutos</option>)}
-                        </select>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label>Início do expediente</Label>
-                          <Input type="time" value={settings.startTime} onChange={(e:any)=>setSettings(s=>({ ...s, startTime: e.target.value }))} />
-                        </div>
-                        <div>
-                          <Label>Fim do expediente</Label>
-                          <Input type="time" value={settings.endTime} onChange={(e:any)=>setSettings(s=>({ ...s, endTime: e.target.value }))} />
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-2 gap-2 items-end">
-                        <div>
-                          <Label>Disponibilidade - Início</Label>
-                          <Input type="date" value={settings.availableFrom || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableFrom: e.target.value || undefined }))} />
-                        </div>
-                        <div>
-                          <Label>Disponibilidade - Fim</Label>
-                          <Input type="date" value={settings.availableTo || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableTo: e.target.value || undefined }))} />
-                        </div>
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-2">Se preenchido, o calendário só permitirá agendamentos dentro deste intervalo.</div>
-
-                      <div>
-                        <Label>Dias da semana</Label>
-                        <div className="flex gap-2 mt-2 flex-wrap">
-                          {['Dom','Seg','Ter','Qua','Qui','Sex','Sab'].map((d, i) => (
-                            <label key={d} className="inline-flex items-center gap-2">
-                              <input type="checkbox" checked={settings.workingDays.includes(i)} onChange={() => toggleDay(i)} />
-                              <span className="text-sm ml-1">{d}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button onClick={save}>Salvar</Button>
-                        <Button variant="ghost" onClick={resetDefaults}>Redefinir</Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
-            ) : null}
+            <TabPanel id={activeSection}>
+              {activeSection === 'agendamentos' ? (
+                <div className="space-y-4">
+                  {/* Calendar settings card (previously 'Configurações do Calendário') */}
+                  <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
+                    <CardHeader>
+                      <CardTitle>Agendamentos</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <Label>Intervalo (min)</Label>
+                          <select value={String(settings.interval)} onChange={(e)=>setSettings(s=>({ ...s, interval: Number(e.target.value)}))} className="mt-1 block w-32 rounded border p-2">
+                            {[5,10,15,30,60].map(n=> <option key={n} value={n}>{n} minutos</option>)}
+                          </select>
+                        </div>
 
-            {activeSection === 'usuarios' ? (
-              <div>
-                <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
-                  <CardHeader>
-                    <div className="w-full flex items-center justify-between">
-                      <CardTitle>Usuarios</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Button onClick={openNewUser} size="sm">Novo usuário</Button>
-                        <Button onClick={openGroupsModal} size="sm" variant="outline">Gerenciar Grupos</Button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label>Início do expediente</Label>
+                            <Input type="time" value={settings.startTime} onChange={(e:any)=>setSettings(s=>({ ...s, startTime: e.target.value }))} />
+                          </div>
+                          <div>
+                            <Label>Fim do expediente</Label>
+                            <Input type="time" value={settings.endTime} onChange={(e:any)=>setSettings(s=>({ ...s, endTime: e.target.value }))} />
+                          </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-2 items-end">
+                          <div>
+                            <Label>Disponibilidade - Início</Label>
+                            <Input type="date" value={settings.availableFrom || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableFrom: e.target.value || undefined }))} />
+                          </div>
+                          <div>
+                            <Label>Disponibilidade - Fim</Label>
+                            <Input type="date" value={settings.availableTo || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableTo: e.target.value || undefined }))} />
+                          </div>
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-2">Se preenchido, o calendário só permitirá agendamentos dentro deste intervalo.</div>
+
+                        <div>
+                          <Label>Dias da semana</Label>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {['Dom','Seg','Ter','Qua','Qui','Sex','Sab'].map((d, i) => (
+                              <label key={d} className="inline-flex items-center gap-2">
+                                <input type="checkbox" checked={settings.workingDays.includes(i)} onChange={() => toggleDay(i)} />
+                                <span className="text-sm ml-1">{d}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button onClick={save}>Salvar</Button>
+                          <Button variant="ghost" onClick={resetDefaults}>Redefinir</Button>
+                        </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {users.length === 0 ? <div className="text-sm text-muted-foreground">Nenhum usuario</div> : (
-                        users.map(u => (
-                          <div key={u.id} className="flex items-center justify-between p-2 rounded bg-white/5">
-                            <div>
-                              <div className="font-medium">{u.name} <span className="text-xs text-muted-foreground">{u.email}</span></div>
-                              <div className="text-xs text-muted-foreground">{u.role}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : activeSection === 'usuarios' ? (
+                <div>
+                  <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
+                    <CardHeader>
+                      <div className="w-full flex items-center justify-between">
+                        <CardTitle>Usuarios</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Button onClick={openNewUser} size="sm">Novo usuário</Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {users.length === 0 ? <div className="text-sm text-muted-foreground">Nenhum usuario</div> : (
+                          users.map(u => (
+                            <div key={u.id} className="flex items-center justify-between p-2 rounded bg-white/5 dark:bg-white/10 border border-transparent dark:border-white/5">
+                              <div>
+                                <div className="font-medium">{u.name} <span className="text-xs text-muted-foreground">{u.email}</span></div>
+                                <div className="text-xs text-muted-foreground">{u.role}</div>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" onClick={() => {
+                                  setEditingUserId(u.id); setEditingUserName(u.name); setEditingUserEmail(u.email); setEditingUserRole(u.role); setEditingUserPerms(u.permissions || []); setEditingUserPassword(''); setUsersModalOpen(true);
+                                }} aria-label="Editar"><Edit3 className="h-4 w-4"/></Button>
+                                
+                                <Button size="icon" variant="ghost" onClick={async () => {
+                                  try {
+                                                            const res = await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE', credentials: 'include' });
+                                    if (!res.ok) throw new Error('failed');
+                                    setUsers(prev => prev.filter(x=>x.id!==u.id));
+                                    toast({ title: 'Removido' });
+                                  } catch (e) {
+                                    toast({ title: 'Erro', description: 'Não foi possível remover o usuário' });
+                                  }
+                                }} aria-label="Remover"><Trash2 className="h-4 w-4"/></Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div>
+                  <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
+                    <CardHeader>
+                      <div className="w-full flex items-center justify-between">
+                        <CardTitle>Grupos</CardTitle>
+                        <Button onClick={startNewGroup} size="sm">Novo Grupo</Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {groups.map(g => (
+                          <div key={g.id} className="flex items-center justify-between p-3 rounded border bg-white/5 dark:bg-white/10 border-transparent dark:border-white/5 hover:bg-white/10 dark:hover:bg-white/15 transition-colors">
+                            <div className="flex-1">
+                              <div className="font-medium">{g.name}</div>
+                              <div className="text-xs text-muted-foreground">{g.permissions.length} permissões</div>
                             </div>
                             <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" onClick={() => {
-                                setEditingUserId(u.id); setEditingUserName(u.name); setEditingUserEmail(u.email); setEditingUserRole(u.role); setEditingUserPerms(u.permissions || []); setEditingUserPassword(''); setUsersModalOpen(true);
-                              }} aria-label="Editar"><Edit3 className="h-4 w-4"/></Button>
-                              
-                              <Button size="icon" variant="ghost" onClick={async () => {
-                                try {
-                                                          const res = await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE', credentials: 'include' });
-                                  if (!res.ok) throw new Error('failed');
-                                  setUsers(prev => prev.filter(x=>x.id!==u.id));
-                                  toast({ title: 'Removido' });
-                                } catch (e) {
-                                  toast({ title: 'Erro', description: 'Não foi possível remover o usuário' });
-                                }
-                              }} aria-label="Remover"><Trash2 className="h-4 w-4"/></Button>
+                              <Button size="icon" variant="ghost" onClick={() => openEditGroup(g)} aria-label="Editar">
+                                <Edit3 className="h-4 w-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" onClick={() => { if(confirm('Remover grupo?')) handleDeleteGroup(g.id); }} aria-label="Remover">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : null}
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </TabPanel>
           </main>
         </div>
         {/* Edit modal for agendamentos */}
@@ -539,65 +629,6 @@ export default function SettingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Groups modal */}
-        <Dialog open={groupsModalOpen} onOpenChange={setGroupsModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Gerenciar Grupos</DialogTitle>
-            </DialogHeader>
-            <div className="mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm text-muted-foreground">Grupos configuráveis e suas permissões</div>
-                <div>
-                  <Button size="sm" onClick={()=>{ setEditingGroupId(null); setEditingGroupName(''); setEditingGroupPerms([]); setGroupsModalOpen(true); }}>Novo Grupo</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {groups.map(g => (
-                  <div key={g.id} className="flex items-center justify-between p-2 rounded bg-white/5">
-                    <div>
-                      <div className="font-medium">{g.name}</div>
-                      <div className="text-xs text-muted-foreground">{g.permissions.join(', ') || '— nenhuma —'}</div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="icon" variant="ghost" onClick={() => openEditGroup(g)}>Editar</Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDeleteGroup(g.id)}>Remover</Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Group edit area inside the same dialog for simplicity */}
-            <div className="mt-4">
-              <div className="grid grid-cols-1 gap-2">
-                <div>
-                  <Label>Nome do Grupo</Label>
-                  <Input value={editingGroupName} onChange={(e:any)=>setEditingGroupName(e.target.value)} />
-                </div>
-                <div>
-                  <Label>Permissões</Label>
-                  <div className="grid grid-cols-1 gap-1">
-                    {['agendamento:create','agendamento:edit','agendamento:delete','users:manage','calendar:view','calendar:create','calendar:edit','calendar:delete'].map(p => (
-                      <label key={p} className="inline-flex items-center gap-2">
-                        <input type="checkbox" checked={editingGroupPerms.includes(p)} onChange={()=>toggleEditingGroupPerm(p)} />
-                        <span className="text-sm">{p}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <div className="flex gap-2">
-                <Button onClick={handleSaveGroup}>Salvar</Button>
-                <Button variant="ghost" onClick={() => setGroupsModalOpen(false)}>Fechar</Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
         {/* Users edit modal */}
         <Dialog open={usersModalOpen} onOpenChange={setUsersModalOpen}>
           <DialogContent>
@@ -639,7 +670,22 @@ export default function SettingsPage() {
             ) : (
               <div className="grid grid-cols-1 gap-2">
                 <div className="text-sm text-muted-foreground">Selecione permissões:</div>
-                {['agendamento:create','agendamento:edit','agendamento:delete','users:manage','calendar:view','calendar:create','calendar:edit','calendar:delete'].map(p => (
+                {[
+                  'dashboard:view',
+                  'contacts:view',
+                  'contacts:create',
+                  'contacts:edit',
+                  'contacts:delete',
+                  'calendar:view',
+                  'calendar:create',
+                  'calendar:edit',
+                  'calendar:delete',
+                  'settings:view',
+                  'settings:edit',
+                  'users:view',
+                  'users:manage',
+                  'groups:manage'
+                ].map(p => (
                   <label key={p} className="inline-flex items-center gap-2">
                     <input type="checkbox" checked={editingUserPerms.includes(p)} onChange={()=>toggleEditingUserPerm(p)} />
                     <span className="text-sm">{p}</span>
@@ -663,6 +709,60 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <Button onClick={handleSaveUser}>Salvar</Button>
                 <Button variant="ghost" onClick={() => setUsersModalOpen(false)}>Cancelar</Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Groups modal */}
+        <Dialog open={groupModalOpen} onOpenChange={setGroupModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingGroupId ? 'Editar Grupo' : 'Novo Grupo'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Nome do Grupo</Label>
+                <Input 
+                  value={editingGroupName} 
+                  onChange={(e) => setEditingGroupName(e.target.value)} 
+                  placeholder="Ex: Administradores" 
+                />
+              </div>
+              <div>
+                <Label>Permissões</Label>
+                <div className="mt-2 space-y-1 max-h-96 overflow-y-auto">
+                  {[
+                    'dashboard:view',
+                    'contacts:view',
+                    'contacts:create',
+                    'contacts:edit',
+                    'contacts:delete',
+                    'calendar:view',
+                    'calendar:create',
+                    'calendar:edit',
+                    'calendar:delete',
+                    'settings:view',
+                    'settings:edit',
+                    'users:view',
+                    'users:manage',
+                    'groups:manage'
+                  ].map(p => (
+                    <label key={p} className="flex items-center gap-2 p-2 rounded hover:bg-muted/10 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={editingGroupPerms.includes(p)} 
+                        onChange={() => toggleEditingGroupPerm(p)} 
+                      />
+                      <span className="text-sm">{p}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveGroup}>Salvar</Button>
+                <Button variant="ghost" onClick={cancelGroupEdit}>Cancelar</Button>
               </div>
             </DialogFooter>
           </DialogContent>
