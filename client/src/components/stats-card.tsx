@@ -1,32 +1,31 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { LucideIcon } from "lucide-react";
+"use client";
 
-interface StatsCardProps {
+import React from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CardHeader, CardTitle } from "@/components/ui/card";
+
+interface Props {
   title: string;
   value: string | number;
-  icon: LucideIcon;
   description?: string;
+  icon?: React.ComponentType<any>;
 }
 
-export function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
+export function StatsCard({ title, value, description, icon: Icon }: Props) {
   return (
     <Card>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-            <p className="text-2xl font-bold text-foreground" data-testid={`stat-${title.toLowerCase().replace(/\s+/g, '-')}`}>
-              {value}
-            </p>
-            {description && (
-              <p className="text-xs text-muted-foreground mt-1">{description}</p>
-            )}
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-            <Icon className="h-6 w-6 text-primary" />
-          </div>
+      <CardHeader className="flex items-center justify-between">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {Icon && <Icon className="h-5 w-5 text-muted-foreground" />}
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-baseline justify-between">
+          <div className="text-2xl font-semibold text-foreground">{value}</div>
         </div>
+        {description && <p className="text-sm text-muted-foreground mt-2">{description}</p>}
       </CardContent>
     </Card>
   );
 }
+
+export default StatsCard;

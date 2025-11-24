@@ -24,13 +24,21 @@ Avatar.displayName = AvatarPrimitive.Root.displayName
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image
-    ref={ref}
-    className={cn("aspect-square h-full w-full", className)}
-    {...props}
-  />
-))
+>(({ className, onLoad, ...props }, ref) => {
+  const [loaded, setLoaded] = React.useState(false);
+  return (
+    <AvatarPrimitive.Image
+      ref={ref}
+      onLoad={(e) => { setLoaded(true); if (onLoad) onLoad(e as any); }}
+      className={cn(
+        "aspect-square h-full w-full object-cover transition-transform transition-filter duration-300 ease-out",
+        !loaded && "blur-sm scale-105",
+        className
+      )}
+      {...props}
+    />
+  );
+})
 AvatarImage.displayName = AvatarPrimitive.Image.displayName
 
 const AvatarFallback = React.forwardRef<
@@ -40,11 +48,13 @@ const AvatarFallback = React.forwardRef<
   <AvatarPrimitive.Fallback
     ref={ref}
     className={cn(
-      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      "flex h-full w-full items-center justify-center rounded-full bg-muted overflow-hidden",
       className
     )}
     {...props}
-  />
+  >
+    <img src="/default-avatar.svg" alt="avatar" className="h-full w-full object-cover" />
+  </AvatarPrimitive.Fallback>
 ))
 AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
 

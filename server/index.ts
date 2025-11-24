@@ -1,7 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import MemoryStore from "memorystore";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import { db } from './db';
+import { users } from '@shared/schema';
+import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { initializeMinIO } from "./minio";
+import { startScheduler } from "./scheduler";
 
 const app = express();
 
@@ -11,11 +19,65 @@ declare module 'http' {
   }
 }
 app.use(express.json({
+  limit: '20mb',
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '20mb' }));
+
+// Setup session + passport for simple local auth
+const MemoryStoreClass = MemoryStore(session as any);
+const sessionSecret = process.env.SESSION_SECRET || 'dev-secret';
+app.use(session({
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000,
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
+  },
+  store: new MemoryStoreClass({ checkPeriod: 86400000 }),
+  resave: false,
+  saveUninitialized: false,
+  secret: sessionSecret,
+}) as any);
+
+// Configure passport local strategy to authenticate against `users` table
+passport.use(new LocalStrategy((username, password, done) => {
+  // find user in DB
+  db.select()
+    .from(users)
+    .where(eq(users.username, username))
+    .then((rows: any[]) => {
+      const user = rows[0];
+      if (!user) return done(null, false, { message: 'Invalid credentials' });
+      try {
+        const iterations = user.iterations || 100000;
+        const hash = crypto.pbkdf2Sync(password, user.salt, iterations, 64, 'sha512').toString('hex');
+        if (hash === user.passwordHash) {
+          return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null });
+        }
+        return done(null, false, { message: 'Invalid credentials' });
+      } catch (e) {
+        return done(e as any);
+      }
+    }).catch((err: any) => done(err));
+}));
+
+passport.serializeUser((user: any, done) => done(null, user.id));
+passport.deserializeUser((id: any, done) => {
+  db.select().from(users).where(eq(users.id, id)).then((rows: any[]) => {
+    const user = rows[0];
+    if (!user) return done(null, false);
+    return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null });
+  }).catch((err: any) => done(err));
+});
+
+app.use(passport.initialize() as any);
+app.use(passport.session() as any);
+
+// CORS middleware removed per request.
+// Previously the server set Access-Control headers here; it has been disabled.
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -48,11 +110,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize MinIO
+  // Ensure local uploads directory exists (APP_DATA_DIR or default `public/uploads`)
   try {
-    await initializeMinIO();
-  } catch (error) {
-    console.error('Failed to initialize MinIO:', error);
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const APP_DATA_DIR = process.env.APP_DATA_DIR ? path.resolve(String(process.env.APP_DATA_DIR)) : path.resolve(process.cwd(), 'public', 'uploads');
+    await fs.mkdir(APP_DATA_DIR, { recursive: true });
+    log(`Using APP_DATA_DIR=${APP_DATA_DIR}`);
+  } catch (err) {
+    console.error('Failed to ensure APP_DATA_DIR:', err);
   }
 
   const server = await registerRoutes(app);
@@ -83,7 +149,14 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
+    cors: false,
   }, () => {
     log(`serving on port ${port}`);
+    try {
+      startScheduler();
+      log('scheduler started');
+    } catch (err) {
+      console.error('Failed to start scheduler', err);
+    }
   });
 })();

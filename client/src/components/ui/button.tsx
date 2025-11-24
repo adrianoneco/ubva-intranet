@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0" +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0" +
   " hover-elevate active-elevate-2",
   {
     variants: {
@@ -21,6 +21,7 @@ const buttonVariants = cva(
         secondary: "border bg-secondary text-secondary-foreground border border-secondary-border ",
         // Add a transparent border so that when someone toggles a border on later, it doesn't shift layout/size.
         ghost: "border border-transparent",
+        glass: "bg-gradient-to-br from-white/5 via-white/3 to-white/2 backdrop-blur-md border border-white/20 text-primary-foreground shadow-md hover:brightness-105",
       },
       // Heights are set as "min" heights, because sometimes Ai will place large amount of content
       // inside buttons. With a min-height they will look appropriate with small amounts of content,

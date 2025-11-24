@@ -18,7 +18,11 @@ const redisConfig = {
   },
 };
 
-export const redis = new Redis(redisConfig);
+// Allow connecting via `REDIS_URL` (e.g. redis://:password@host:6379/0) if provided.
+// ioredis accepts either a connection string or an options object.
+export const redis = process.env.REDIS_URL
+  ? new Redis(process.env.REDIS_URL)
+  : new Redis(redisConfig);
 
 redis.on('connect', () => {
   isRedisAvailable = true;

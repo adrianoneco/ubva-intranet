@@ -1,0 +1,217 @@
+SITE PROMPT GENERATION
+generated_at: 2025-11-18T14:16:31.009Z
+
+--- CARDS ---
+id: 1
+title: Cardápio
+subtitle: cardapio do dia
+image: http://intranet.ubva.local:9000/intranet/1763471873104-bc6gm7.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=admin%2F20251118%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251118T131753Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=7ebd67c5a707286570b5e01c41df35b934f02bbc6c45d8f5f92e2df61f973713
+scheduleWeekdays: 
+
+id: 4
+title: Aniversários
+subtitle: Aniversariantes do Mês
+image: http://intranet.ubva.local:9000/intranet/1763401875639-qfez4v.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=admin%2F20251117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251117T175116Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=0a6a927da16000367f193301fa695790854a243cea85f1c7a29e70b3940d9a33
+scheduleWeekdays: 
+
+id: 5
+title: Campanha Interna
+subtitle: Reflexão
+image: http://intranet.ubva.local:9000/intranet/1763401883943-2bxpbm.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=admin%2F20251117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251117T175124Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=eecb8c84542abea0fb3ad76a3bb89cb81945b14be0b0f3e3440180954b3e68ba
+scheduleWeekdays: 
+
+id: 6
+title: Raio X
+subtitle: Cultura Organizacional
+image: http://intranet.ubva.local:9000/intranet/1763401892431-h62271.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=admin%2F20251117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251117T175133Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=d24901eb5092ab2f2f623c323dcfb40b5bf4007c1be20a1b6c08b80cd6dc4d81
+scheduleWeekdays: 
+
+--- TASKS ---
+
+--- CATEGORIES ---
+
+--- CONTACTS (/contacts) ---
+section: ramais
+- name: Tercio Morotti
+  ramal: 4135120621
+  departamento: COMERCIAL
+  setor: COMERCIAL
+  image: http://intranet.ubva.local:9000/intranet/1763403838568-mj1rqj.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=admin%2F20251117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251117T182358Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=19469dced7dacd6162a3c0b7abeb7593397d5fe6529bbdc3717ec672cd725ece
+- name: Luciene Silva
+  ramal: 4135120628
+  departamento: COMERCIAL
+  setor: COMERCIAL
+  image: http://intranet.ubva.local:9000/intranet/1763403870610-hsqmdl.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=admin%2F20251117%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251117T182431Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=4a95cd95fa171aa8ac68626970eedd5dcbe0de696efeaf4b9f550b4044eeec40
+- name: Patricia
+  ramal: (41)3512.0607
+  departamento: 
+- name: Jaime
+  ramal: (41)3512.0638
+  departamento: 
+- name: Janaina Bertoti
+  ramal: (41)3512.0619
+  departamento: 
+- name: Luiz
+  ramal: (41)3512.0608
+  departamento: 
+- name: Marcio Mueller
+  ramal: (41)3512.0607
+  departamento: 
+- name: Robert
+  ramal: (41)3512.0604
+  departamento: 
+- name: Soraya
+  ramal: (41)3512.0654
+  departamento: 
+- name: Junior
+  ramal: (41)3512.0652
+  departamento: 
+- name: Rogger
+  ramal: (41)3512.0648
+  departamento: 
+- name: Cintia
+  ramal: (41)3512.0613
+  departamento: 
+- name: Rafaela
+  ramal: (41)3512.0614
+  departamento: 
+- name: Francielli
+  ramal: (41)3512.0675
+  departamento: 
+- name: Jucilene
+  ramal: (41)3512.0663
+  departamento: 
+- name: Cassi
+  ramal: (41)3512.0612
+  departamento: 
+- name: Daiane
+  ramal: (41)3512.0634
+  departamento: 
+- name: Janaina Oliveira
+  ramal: (41)3512.0636
+  departamento: 
+- name: Aline
+  ramal: (41)3512.0600
+  departamento: 
+- name: Cliceu
+  ramal: (41)3512.0678
+  departamento: 
+- name: Adriano Neco
+  ramal: (41)3512.0649
+  departamento: 
+- name: Generoso
+  ramal: (41)3512.0606
+  departamento: 
+- name: Sérgio
+  ramal: (41)3512.0622
+  departamento: 
+- name: Alan
+  ramal: (41)3512.0645
+  departamento: 
+- name: Alexandre
+  ramal: (41)3512.0624
+  departamento: 
+- name: Maikon
+  ramal: (41)3512.0658
+  departamento: 
+- name: Edilene
+  ramal: (41)3512.0602
+  departamento: 
+- name: Elaine
+  ramal: (41)3512.0672
+  departamento: 
+- name: Adriano Martins
+  ramal: (41)3512.0623
+  departamento: 
+- name: Valmor
+  ramal: (41)3512.0626
+  departamento: 
+- name: Rafael
+  ramal: (41)3512.0637
+  departamento: 
+- name: Ivan
+  ramal: (41)3512.0667
+  departamento: 
+- name: Gilmar
+  ramal: (41)3512.0643
+  departamento: 
+- name: Nicolas
+  ramal: (41)3512.0643
+  departamento: 
+- name: Mota
+  ramal: (41)3512.0625
+  departamento: 
+- name: Claudia
+  ramal: (41)3512.0605
+  departamento: 
+- name: Fernanda Veiga
+  ramal: (51)3181.1015
+  departamento: 
+- name: Nilton
+  ramal: (11)2108.1034
+  departamento: 
+- name: Rafaela Rocha
+  ramal: (41)3512.0675
+  departamento: 
+- name: Claudia
+  ramal: (41)3512.0605
+  departamento: 
+- name: Rodrigo Dybas
+  ramal: (41)3512.0677
+  departamento: 
+- name: Lilian
+  ramal: (11)2108-1006
+  departamento: 
+- name: Camilla
+  ramal: (41)3512.0664
+  departamento: 
+- name: Rodrigo Borges
+  ramal: (41)3512.0627
+  departamento: 
+- name: Joyce
+  ramal: (41)3512.0620
+  departamento: 
+- name: Suzana
+  ramal: (41)3512.0629
+  departamento: 
+- name: Francielli
+  ramal: (41)3512.0651
+  departamento: 
+- name: Gabrielle
+  ramal: (41)3512.0676
+  departamento: 
+- name: Márcio França
+  ramal: (41)3512.0633
+  departamento: 
+- name: Nilceia
+  ramal: (41)3512.0607
+  departamento: 
+- name: Thaslayne
+  ramal: (41)3512.0653
+  departamento: 
+- name: Welington
+  ramal: (41)3512.0616
+  departamento: 
+- name: Lucielly
+  ramal: (41)3512.0684
+  departamento: 
+- name: Darci
+  ramal: (41)3512.0669
+  departamento: 
+- name: Darci
+  ramal: (41)3512.0680
+  departamento: 
+- name: João
+  ramal: (41)3512.0615
+  departamento: 
+- name: Marcos ( Kit )
+  ramal: (41)3512.0665
+  departamento: 
+
+section: departments
+
+section: companies
+
+section: setor
+
+section: cargos

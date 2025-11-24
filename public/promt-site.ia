@@ -1,0 +1,222 @@
+SITE PROMPT GENERATION
+generated_at: 2025-11-24T13:41:06.065Z
+
+--- CARDS ---
+id: 1
+title: Cardápio
+subtitle: cardapio do dia
+image: /api/files/cards/1763480049578-pudzmt.png
+scheduleWeekdays: 
+
+id: 4
+title: Aniversários
+subtitle: Aniversariantes do Mês
+image: /api/files/cards/1763480057163-nqeqt3.png
+scheduleWeekdays: 
+
+id: 5
+title: Campanha Interna
+subtitle: Reflexão
+image: /api/files/cards/1763480065870-6iilfr.png
+scheduleWeekdays: 
+
+id: 6
+title: Raio X
+subtitle: Cultura Organizacional
+image: /api/files/cards/1763480077715-py85mt.png
+scheduleWeekdays: 
+
+--- TASKS ---
+
+--- CATEGORIES ---
+
+--- CONTACTS (/contacts) ---
+section: ramais
+- name: Tercio Morotti
+  ramal: 4135120621
+  departamento: COMERCIAL
+  setor: COMERCIAL
+  image: /api/files/uploads/1763480096389-ibnl93.png
+- name: Luciene Silva
+  ramal: 4135120628
+  departamento: COMERCIAL
+  setor: COMERCIAL
+  image: /api/files/uploads/1763480105593-11d42b.png
+- name: Patricia
+  ramal: 4135120607
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480208862-qviop1.png
+- name: Jaime
+  ramal: 4135120638
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480282802-0xfyfm.png
+- name: Janaina Bertoti
+  ramal: 4135120619
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480323008-mwa9i2.png
+- name: Luiz
+  ramal: 4135120608
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480346431-9gbouc.png
+- name: Marcio Mueller
+  ramal: 4135120607
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480374370-e0nid8.png
+- name: Robert
+  ramal: 4135120604
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480394304-xjtmvc.png
+- name: Soraya
+  ramal: 4135120654
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480412851-ivyqxl.png
+- name: Junior
+  ramal: (41)3512.0652
+  departamento: 
+- name: Rogger
+  ramal: (41)3512.0648
+  departamento: 
+- name: Cintia
+  ramal: (41)3512.0613
+  departamento: 
+- name: Rafaela
+  ramal: (41)3512.0614
+  departamento: 
+- name: Jucilene
+  ramal: (41)3512.0663
+  departamento: 
+- name: Cassi
+  ramal: (41)3512.0612
+  departamento: 
+- name: Daiane
+  ramal: (41)3512.0634
+  departamento: 
+- name: Janaina Oliveira
+  ramal: (41)3512.0636
+  departamento: 
+- name: Aline
+  ramal: (41)3512.0600
+  departamento: 
+- name: Cliceu
+  ramal: (41)3512.0678
+  departamento: 
+- name: Adriano Neco
+  ramal: (41)3512.0649
+  departamento: 
+- name: Generoso
+  ramal: (41)3512.0606
+  departamento: 
+- name: Sérgio
+  ramal: 4135120622
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480497714-j223tg.png
+- name: Alan
+  ramal: (41)3512.0645
+  departamento: 
+- name: Alexandre
+  ramal: (41)3512.0624
+  departamento: 
+- name: Maikon
+  ramal: (41)3512.0658
+  departamento: 
+- name: Edilene
+  ramal: (41)3512.0602
+  departamento: 
+- name: Elaine
+  ramal: (41)3512.0672
+  departamento: 
+- name: Adriano Martins
+  ramal: (41)3512.0623
+  departamento: 
+- name: Valmor
+  ramal: (41)3512.0626
+  departamento: 
+- name: Rafael
+  ramal: (41)3512.0637
+  departamento: 
+- name: Ivan
+  ramal: (41)3512.0667
+  departamento: 
+- name: Gilmar
+  ramal: (41)3512.0643
+  departamento: 
+- name: Nicolas
+  ramal: (41)3512.0643
+  departamento: 
+- name: Mota
+  ramal: (41)3512.0625
+  departamento: 
+- name: Claudia
+  ramal: (41)3512.0605
+  departamento: 
+- name: Fernanda Veiga
+  ramal: (51)3181.1015
+  departamento: 
+- name: Nilton
+  ramal: (11)2108.1034
+  departamento: 
+- name: Rafaela Rocha
+  ramal: (41)3512.0675
+  departamento: 
+- name: Rodrigo Dybas
+  ramal: 4135120677
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480544939-hac36k.png
+- name: Lilian
+  ramal: (11)2108-1006
+  departamento: 
+- name: Camilla
+  ramal: (41)3512.0664
+  departamento: 
+- name: Rodrigo Borges
+  ramal: 4135120627
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480568426-s1b5s6.png
+- name: Joyce
+  ramal: 4135120620
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480597581-z88yov.png
+- name: Suzana
+  ramal: 4135120629
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480639555-m50cjc.png
+- name: Francielli
+  ramal: (41)3512.0651
+  departamento: 
+- name: Gabrielle
+  ramal: (41)3512.0676
+  departamento: 
+- name: Márcio França
+  ramal: 4135120633
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480665656-nrw81q.png
+- name: Nilceia
+  ramal: 4135120607
+  departamento: COMERCIAL
+  image: /api/files/uploads/1763480691097-3uy1xr.png
+- name: Thaslayne
+  ramal: (41)3512.0653
+  departamento: 
+- name: Welington
+  ramal: (41)3512.0616
+  departamento: 
+- name: Lucielly
+  ramal: (41)3512.0684
+  departamento: 
+- name: Darci
+  ramal: (41)3512.0669
+  departamento: 
+- name: João
+  ramal: (41)3512.0615
+  departamento: 
+- name: Marcos ( Kit )
+  ramal: (41)3512.0665
+  departamento: 
+
+section: departments
+
+section: companies
+
+section: setor
+
+section: cargos

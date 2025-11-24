@@ -1,7 +1,7 @@
 import { Task, Category } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
+// Badge component not used here; keep file minimal
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { format } from "date-fns";
@@ -20,7 +20,7 @@ export function TaskCard({ task, category, onToggle, onDelete }: TaskCardProps) 
         <div className="flex items-start gap-4">
           <Checkbox
             checked={task.completed}
-            onCheckedChange={(checked) => onToggle(task.id, checked as boolean)}
+            onCheckedChange={(checked) => onToggle(task.id, Boolean(checked))}
             className="mt-1"
             data-testid={`checkbox-task-${task.id}`}
           />
@@ -51,13 +51,13 @@ export function TaskCard({ task, category, onToggle, onDelete }: TaskCardProps) 
             )}
             <div className="flex items-center gap-3 flex-wrap">
               {category && (
-                <Badge
+                <span
+                  className="px-2 py-0.5 rounded text-white text-xs font-semibold"
                   style={{ backgroundColor: category.color }}
-                  className="text-white"
                   data-testid={`badge-category-${task.id}`}
                 >
                   {category.name}
-                </Badge>
+                </span>
               )}
               <span className="text-xs text-muted-foreground" data-testid={`text-date-${task.id}`}>
                 {format(new Date(task.createdAt), "MMM dd, yyyy")}
@@ -69,3 +69,5 @@ export function TaskCard({ task, category, onToggle, onDelete }: TaskCardProps) 
     </Card>
   );
 }
+
+export default TaskCard;

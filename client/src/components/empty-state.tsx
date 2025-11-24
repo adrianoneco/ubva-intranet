@@ -1,24 +1,33 @@
-import { CheckSquare, PlusCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+"use client";
 
-interface EmptyStateProps {
-  onCreateClick: () => void;
+import React from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PlusCircle } from "lucide-react";
+
+interface Props {
+  onCreateClick?: () => void;
+  title?: string;
+  description?: string;
 }
 
-export function EmptyState({ onCreateClick }: EmptyStateProps) {
+export function EmptyState({ onCreateClick, title = "No items yet", description = "Create one to get started." }: Props) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-4" data-testid="empty-state">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted mb-6">
-        <CheckSquare className="h-10 w-10 text-muted-foreground" />
-      </div>
-      <h3 className="text-2xl font-semibold mb-2">No tasks yet</h3>
-      <p className="text-muted-foreground text-center mb-8 max-w-md">
-        Get started by creating your first task. Stay organized and track your progress with ease.
-      </p>
-      <Button onClick={onCreateClick} size="lg" data-testid="button-create-first-task">
-        <PlusCircle className="h-5 w-5 mr-2" />
-        Create Your First Task
-      </Button>
-    </div>
+    <Card className="w-full">
+      <CardContent className="p-8 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <p className="text-sm text-muted-foreground">{description}</p>
+          <div className="pt-4">
+            <Button onClick={onCreateClick}>
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Criar
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
+
+export default EmptyState;
