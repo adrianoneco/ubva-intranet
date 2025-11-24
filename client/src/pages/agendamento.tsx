@@ -409,28 +409,32 @@ export default function AgendamentoPage() {
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
         <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
           <CardHeader>
-            <div className="w-full flex items-center justify-between">
-              <CardTitle>Agendamento de Retirada de Pedidos</CardTitle>
-              <div className="flex items-center gap-3 text-sm">
-                <Button size="sm" variant="ghost" onClick={() => setRangeModalOpen(true)}>Agendar Intervalo</Button>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded bg-purple-600" />
-                  <span className="text-xs text-muted-foreground">Agendado</span>
+              <div className="w-full flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <CardTitle className="text-lg">Agendamento de Retirada de Pedidos</CardTitle>
+                  <div className="text-sm text-muted-foreground mt-1">Selecione uma data e um horário para agendar retiradas.</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded bg-lime-600" />
-                  <span className="text-xs text-muted-foreground">Confirmado</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded bg-emerald-600" />
-                  <span className="text-xs text-muted-foreground">Entregue</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded bg-red-600" />
-                  <span className="text-xs text-muted-foreground">Cancelado</span>
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded bg-purple-600" />
+                      <span className="text-xs text-muted-foreground">Agendado</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded bg-lime-600" />
+                      <span className="text-xs text-muted-foreground">Confirmado</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded bg-emerald-600" />
+                      <span className="text-xs text-muted-foreground">Entregue</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded bg-red-600" />
+                      <span className="text-xs text-muted-foreground">Cancelado</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
@@ -498,7 +502,7 @@ export default function AgendamentoPage() {
                       const baseDisabled = isPastDay || (!isWithinAvailability) || (!isWorkingDay && !hasAvailableSlot);
                       const monthBg = isCurrentMonth ? 'bg-white' : 'bg-muted/30 text-muted-foreground';
                       const selectedBg = selectedDate === iso ? 'bg-primary text-primary-foreground' : '';
-                      const todayRing = isToday ? 'ring-1 ring-primary' : '';
+                      const todayRing = isToday ? 'ring-2 ring-primary' : '';
                       const disabledCls = baseDisabled ? 'bg-muted/30 text-muted-foreground cursor-not-allowed' : '';
 
                       return (
@@ -507,7 +511,7 @@ export default function AgendamentoPage() {
                           type="button"
                           onClick={() => { if (!baseDisabled) { setSelectedDate(iso); setDate(iso); } }}
                           disabled={baseDisabled}
-                          className={`p-1 h-12 text-center rounded border ${selectedBg || monthBg} ${disabledCls} ${todayRing}`}
+                          className={`p-2 h-14 text-center rounded border shadow-sm ${selectedBg || monthBg} ${disabledCls} ${todayRing} hover:scale-100`}
                         >
                           <div className="flex flex-col items-center">
                             <div className="text-sm font-medium">{dt.getDate()}</div>
@@ -535,8 +539,8 @@ export default function AgendamentoPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-8 gap-1 p-1 border rounded text-xs flex-1 overflow-auto">
-                    {generateTimeSlots().map(slot => {
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2 p-2 border rounded text-sm flex-1 overflow-auto">
+                  {generateTimeSlots().map(slot => {
                     const useDate = selectedDate || date;
                     const settings = loadScheduleSettings();
                     const day = useDate ? new Date(useDate).getDay() : null;
@@ -592,7 +596,7 @@ export default function AgendamentoPage() {
 
                     // determine if the date is within configured availability
                     const slotBtn = (
-                      <button key={slot} type="button" disabled={disabled} onClick={() => booking ? openEdit(booking) : openModalFor(slot)} className={`text-xs py-1 px-1 rounded border ${booking ? `${statusBg(booking.status)} text-white font-bold` : isPast ? 'bg-muted/30 text-muted-foreground cursor-not-allowed' : 'bg-muted/10 hover:bg-muted/20'}`}>
+                      <button key={slot} type="button" disabled={disabled} onClick={() => booking ? openEdit(booking) : openModalFor(slot)} className={`min-w-[90px] text-sm py-2 px-3 rounded-lg border ${booking ? `${statusBg(booking.status)} text-white font-bold` : isPast ? 'bg-muted/30 text-muted-foreground cursor-not-allowed' : 'bg-muted/10 hover:bg-muted/20'}`}>
                         <div className="flex flex-col items-center">
                           <div className="font-medium">{slot}</div>
                           {booking ? <div className={`text-xs text-white font-bold`}>Agendado</div> : isPast ? <div className="text-xs text-muted-foreground">Expirado</div> : (isWithinAvailability ? <div className="text-xs text-muted-foreground">Disponível</div> : null)}

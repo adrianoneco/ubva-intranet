@@ -395,7 +395,7 @@ export default function SettingsPage() {
                           <Input type="time" value={settings.endTime} onChange={(e:any)=>setSettings(s=>({ ...s, endTime: e.target.value }))} />
                         </div>
                       </div>
-                      <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="mt-4 grid grid-cols-2 gap-2 items-end">
                         <div>
                           <Label>Disponibilidade - Início</Label>
                           <Input type="date" value={settings.availableFrom || ''} onChange={(e:any)=>setSettings(s=>({ ...s, availableFrom: e.target.value || undefined }))} />
