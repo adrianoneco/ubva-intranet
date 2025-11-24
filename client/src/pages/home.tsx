@@ -418,8 +418,7 @@ export default function Home() {
                         })()}
                         schedules={schedules}
                         createdByMe={createdByMe}
-                        onEdit={user ? handleEditCard : undefined}
-                        onDelete={user ? handleDeleteCard : undefined}
+                        {...(user ? { onEdit: handleEditCard, onDelete: handleDeleteCard } : {})}
                       />
                     );
                   })}
@@ -475,7 +474,7 @@ export default function Home() {
                         onToggle={(id: number, completed: boolean) =>
                           toggleTaskMutation.mutate({ id, completed })
                         }
-                        onDelete={user ? (id: number) => deleteTaskMutation.mutate(id) : undefined}
+                        {...(user ? { onDelete: (id: number) => deleteTaskMutation.mutate(id) } : {})}
                       />
                     ))}
                   </div>

@@ -129,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const csv = (req.body && req.body.csv) || '';
       if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'Missing csv body' });
 
-      function splitSemicolonRow(line: string) {
+      const splitSemicolonRow = (line: string) => {
         const res: string[] = [];
         let cur = '';
         let inQuotes = false;
@@ -141,12 +141,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         res.push(cur);
         return res.map(s => s.trim());
-      }
+      };
 
-      function isEmail(v: string) {
+      const isEmail = (v: string) => {
         if (!v) return false;
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-      }
+      };
 
       const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (lines.length === 0) return res.json({ headersDetected: false, rows: [], summary: { valid: 0, invalid: 0 } });
@@ -466,7 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.update(users).set(patch).where(eq(users.id, id));
       const [row] = await db.select().from(users).where(eq(users.id, id));
       console.log(`[USER UPDATE] Updated user ${row.username}, has passwordHash: ${!!row.passwordHash}`);
-      return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.display_name, email: row.email, role: row.role, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.displayName, email: row.email, role: row.role, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
     } catch (e) {
       console.error('Failed to update user', e);
       return res.status(500).json({ error: 'Failed to update user' });

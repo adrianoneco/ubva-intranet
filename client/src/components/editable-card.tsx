@@ -9,8 +9,8 @@ interface EditableCardProps {
   title: string;
   subtitle?: string;
   image?: string;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
   nextScheduleStart?: string | null;
   schedules?: any[];
   createdByMe?: boolean;
@@ -120,10 +120,10 @@ export function EditableCard({ id, title, subtitle, image, onEdit, onDelete, nex
               <div className="flex items-center gap-2 ml-4">
                 {user ? (
                   <>
-                    <Button size="icon" variant="ghost" onClick={() => onEdit(id)} aria-label="Editar">
+                    <Button size="icon" variant="ghost" onClick={() => onEdit && onEdit(id)} aria-label="Editar">
                       <Edit3 className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" onClick={() => onDelete(id)} aria-label="Apagar">
+                    <Button size="icon" variant="ghost" onClick={() => onDelete && onDelete(id)} aria-label="Apagar">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </>

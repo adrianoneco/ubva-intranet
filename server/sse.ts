@@ -24,14 +24,14 @@ export function registerSSE(app: Express) {
 
 export function broadcast(event: SSEPayload) {
   const data = `data: ${JSON.stringify(event)}\n\n`;
-  for (const res of clients) {
+  Array.from(clients).forEach((res) => {
     try {
       res.write(data);
     } catch (err) {
       // ignore write errors and remove client
-      clients.delete(res);
+      clients.delete(res as any);
     }
-  }
+  });
 }
 
 // Heartbeat/tick broadcaster — emits a lightweight tick event to all SSE clients.

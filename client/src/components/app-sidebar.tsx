@@ -46,7 +46,11 @@ export function AppSidebar() {
   const { user, loading, hasPermission } = useAuth();
 
   const visibleMenuItems = React.useMemo(() => {
-    if (loading || !user) return [];
+    if (loading) return [];
+    // when not logged in, show Dashboard and Contacts publicly
+    if (!user) {
+      return menuItems.filter(item => item.permission === 'dashboard:view' || item.permission === 'contacts:view');
+    }
     return menuItems.filter(item => hasPermission(item.permission));
   }, [user, loading, hasPermission]);
 

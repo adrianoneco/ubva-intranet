@@ -304,16 +304,14 @@ function App() {
                   nextScheduleStart={nextStart}
                   schedules={schedules}
                   createdByMe={myCreatedIds.includes(String(c.id))}
-                  onEdit={user ? handleEdit : undefined}
-                  onDelete={user ? handleDelete : undefined}
+                  {...(user ? { onEdit: handleEdit, onDelete: handleDelete } : {})}
                 />
               );
             })}
           </div>
         )}
       </div>
-      );
-    }
+    );
   }
 
   return (
