@@ -387,7 +387,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/users', requireAuth, async (_req, res) => {
     try {
       const rows: any[] = await db.select().from(users);
-      const out = rows.map(r => ({ id: r.id, username: r.username, displayName: r.displayName || r.display_name || null, email: r.email || null, role: r.role, permissions: r.permissions ? JSON.parse(r.permissions) : [] }));
+      const out: any[] = [];
+      for (const r of rows) {
+        let perms: string[] = [];
+        try {
+          if (r.permissions) perms = JSON.parse(r.permissions);
+          if ((!perms || perms.length === 0) && r.role) {
+            const groupsRows: any[] = await db.select().from(groups).where(eq(groups.id, r.role));
+            if (Array.isArray(groupsRows) && groupsRows.length) {
+              perms = groupsRows[0].permissions ? JSON.parse(groupsRows[0].permissions) : [];
+            }
+          }
+        } catch (e) { perms = []; }
+        out.push({ id: r.id, username: r.username, displayName: r.displayName || r.display_name || null, email: r.email || null, role: r.role, permissions: perms });
+      }
       return res.json(out);
     } catch (e) {
       console.error('Failed to fetch users', e);
@@ -402,7 +415,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const displayName = String(body.displayName || body.display_name || '').trim();
       const email = body.email ? String(body.email).trim() : null;
       const role = String(body.role || 'viewer');
-      const permissions = Array.isArray(body.permissions) ? body.permissions : [];
+      // Users are linked to groups (role). Ignore per-user permissions; keep empty.
+      const permissions: string[] = [];
 
       // generate a username from email or displayName
       let base = email ? email.split('@')[0] : (displayName ? displayName.toLowerCase().replace(/[^a-z0-9]+/g,'-') : `user${Date.now()}`);
@@ -445,7 +459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.displayName !== undefined) patch.displayName = body.displayName;
       if (body.email !== undefined) patch.email = body.email;
       if (body.role !== undefined) patch.role = body.role;
-      if (body.permissions !== undefined) patch.permissions = JSON.stringify(Array.isArray(body.permissions) ? body.permissions : []);
+      // Do not allow setting per-user permissions here. Permissions are derived from groups (role).
       // allow password change
       if (body.password !== undefined) {
         const newPw = String(body.password || '').trim();
@@ -599,6 +613,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // middleware to require a specific permission
+  function requirePermission(permission: string) {
+    return async (req: any, res: any, next: any) => {
+      try {
+        // admins bypass checks
+        if (req.user && req.user.role === 'admin') return next();
+
+        // try permissions on req.user first
+        let perms: string[] | undefined = undefined;
+        if (req.user && Array.isArray(req.user.permissions)) perms = req.user.permissions;
+
+        // if not present, try to load from DB when we have a user id
+        if ((!perms || perms.length === 0) && req.user && req.user.id) {
+          try {
+            const rows: any[] = await db.select().from(users).where(eq(users.id, req.user.id));
+            if (Array.isArray(rows) && rows.length) {
+              const p = rows[0].permissions;
+              perms = p ? JSON.parse(p) : [];
+            }
+          } catch (e) {
+            // ignore DB error and fall through to forbidden
+          }
+        }
+
+        if (Array.isArray(perms) && perms.includes(permission)) return next();
+        return res.status(403).json({ error: 'Forbidden' });
+      } catch (e) {
+        return res.status(500).json({ error: 'Permission check failed' });
+      }
+    };
+  }
+
   // Protect certain client-side pages (SPA routes) by requiring login.
   // If user has a session or valid Basic auth, allow; otherwise redirect to /login.
   async function spaProtect(req: any, res: any, next: any) {
@@ -674,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Card image upload and attach to card (for editing existing cards)
-  app.post('/api/cards/:id/upload-image', requireAuth, (upload.single('file') as any), async (req, res) => {
+  app.post('/api/cards/:id/upload-image', requireAuth, requirePermission('cards:edit'), (upload.single('file') as any), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid card id' });
@@ -702,7 +748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Schedule image upload (does not modify card) - used for images attached to schedule entries
-  app.post('/api/cards/schedule-upload', requireAuth, (upload.single('file') as any), async (req, res) => {
+  app.post('/api/cards/schedule-upload', requireAuth, requirePermission('cards:edit'), (upload.single('file') as any), async (req, res) => {
     try {
       const file = req.file as Express.Multer.File | undefined;
       if (!file) return res.status(400).json({ error: 'No file provided' });
@@ -887,7 +933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/cards", requireAuth, async (req, res) => {
+  app.post("/api/cards", requireAuth, requirePermission('cards:create'), async (req, res) => {
     try {
       const result = insertCardSchema.safeParse(req.body);
       if (!result.success) {
@@ -905,7 +951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Separate schedule-only update endpoint: updates only scheduleWeekdays
-  app.patch("/api/cards/:id/schedules", requireAuth, async (req, res) => {
+  app.patch("/api/cards/:id/schedules", requireAuth, requirePermission('cards:edit'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const schedules = req.body.schedules ?? req.body.scheduleWeekdays;
@@ -959,7 +1005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/cards/:id", requireAuth, async (req, res) => {
+  app.patch("/api/cards/:id", requireAuth, requirePermission('cards:edit'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updateSchema = insertCardSchema.partial();
@@ -1010,7 +1056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/cards/:id", requireAuth, async (req, res) => {
+  app.delete("/api/cards/:id", requireAuth, requirePermission('cards:delete'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteCard(id);

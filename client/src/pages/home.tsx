@@ -93,7 +93,7 @@ export default function Home() {
   const [editingCard, setEditingCard] = useState<any | undefined>(undefined);
   const [, setTick] = useState(0);
   const [myCreatedIds, setMyCreatedIds] = useState<string[]>([]);
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   React.useEffect(() => {
     try {
@@ -320,42 +320,46 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard
-            title="Total Tasks"
-            value={totalTasks}
-            icon={ListTodo}
-            description="All created tasks"
-          />
-          <StatsCard
-            title="Active Tasks"
-            value={activeTasks}
-            icon={Target}
-            description="Tasks in progress"
-          />
-          <StatsCard
-            title="Completed"
-            value={completedTasks}
-            icon={CheckSquare}
-            description="Finished tasks"
-          />
-          <StatsCard
-            title="Completion Rate"
-            value={`${completionRate}%`}
-            icon={CheckSquare}
-            description="Overall progress"
-          />
-        </div>
+        {hasPermission('dashboard:view') ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <StatsCard
+              title="Total Tasks"
+              value={totalTasks}
+              icon={ListTodo}
+              description="All created tasks"
+            />
+            <StatsCard
+              title="Active Tasks"
+              value={activeTasks}
+              icon={Target}
+              description="Tasks in progress"
+            />
+            <StatsCard
+              title="Completed"
+              value={completedTasks}
+              icon={CheckSquare}
+              description="Finished tasks"
+            />
+            <StatsCard
+              title="Completion Rate"
+              value={`${completionRate}%`}
+              icon={CheckSquare}
+              description="Overall progress"
+            />
+          </div>
+        ) : null}
 
         <div className="mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle className="text-2xl font-semibold">Cards</CardTitle>
               {user ? (
-                <Button onClick={handleCreateCard}>
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  Adicionar Card
-                </Button>
+                hasPermission('cards:create') ? (
+                  <Button onClick={handleCreateCard}>
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Adicionar Card
+                  </Button>
+                ) : null
               ) : (
                 <Button variant="ghost" onClick={() => window.location.href = '/login'}>
                   Entrar
@@ -418,7 +422,8 @@ export default function Home() {
                         })()}
                         schedules={schedules}
                         createdByMe={createdByMe}
-                        {...(user ? { onEdit: handleEditCard, onDelete: handleDeleteCard } : {})}
+                        {...(hasPermission('cards:edit') ? { onEdit: handleEditCard } : {})}
+                        {...(hasPermission('cards:delete') ? { onDelete: handleDeleteCard } : {})}
                       />
                     );
                   })}

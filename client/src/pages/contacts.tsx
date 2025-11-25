@@ -99,6 +99,9 @@ export default function ContactsPage() {
   const hasSidebar = !isMobile && !!sidebarOpen;
 
   const { user } = useAuth();
+  React.useEffect(() => {
+    if (!user) setActive('ramais');
+  }, [user]);
   const { toast } = useToast();
   const DEFAULT_COUNTRY = '+55';
   const csvInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -555,42 +558,169 @@ export default function ContactsPage() {
       }
     } else if (active === 'departments') {
       if (!name) return;
+      const item = { name } as any;
       if (editingIndex !== null) {
-        setDepartments(departments.map((d, i) => i === editingIndex ? { name } : d));
+        const existing = departments[editingIndex] as any;
+        if (user && existing && existing.id) {
+          (async () => {
+            try {
+              const res = await fetch(`/api/contacts/${existing.id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+              if (res.ok) {
+                const json = await res.json().catch(() => null);
+                if (json && json.contact) {
+                  setDepartments(departments.map((d:any,i:number)=> i===editingIndex ? json.contact : d));
+                } else {
+                  setDepartments(departments.map((d:any,i:number)=> i===editingIndex ? item : d));
+                }
+              } else {
+                setDepartments(departments.map((d:any,i:number)=> i===editingIndex ? item : d));
+              }
+            } catch (e) {
+              setDepartments(departments.map((d:any,i:number)=> i===editingIndex ? item : d));
+            }
+          })();
+        } else {
+          setDepartments(departments.map((d:any,i:number)=> i===editingIndex ? { name } : d));
+        }
         setEditingIndex(null);
       } else {
-        setDepartments([...departments, { name }]);
+        if (user) {
+          (async () => {
+            try {
+              const res = await fetch('/api/contacts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'departments', name: item.name }) });
+              if (!res.ok) throw new Error('Failed');
+              const json = await res.json().catch(() => null);
+              if (json && json.contact) setDepartments([...departments, json.contact]);
+              else setDepartments([...departments, item]);
+            } catch (e) {
+              setDepartments([...departments, item]);
+            }
+          })();
+        } else {
+          setDepartments([...departments, { name }]);
+        }
       }
     } else if (active === 'companies') {
       if (!name) return;
+      const item = { name } as any;
       if (editingIndex !== null) {
-        setCompanies(companies.map((c, i) => i === editingIndex ? { name } : c));
+        const existing = companies[editingIndex] as any;
+        if (user && existing && existing.id) {
+          (async () => {
+            try {
+              const res = await fetch(`/api/contacts/${existing.id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+              if (res.ok) {
+                const json = await res.json().catch(() => null);
+                if (json && json.contact) setCompanies(companies.map((c:any,i:number)=> i===editingIndex ? json.contact : c));
+                else setCompanies(companies.map((c:any,i:number)=> i===editingIndex ? item : c));
+              } else setCompanies(companies.map((c:any,i:number)=> i===editingIndex ? item : c));
+            } catch (e) { setCompanies(companies.map((c:any,i:number)=> i===editingIndex ? item : c)); }
+          })();
+        } else {
+          setCompanies(companies.map((c:any,i:number)=> i===editingIndex ? { name } : c));
+        }
         setEditingIndex(null);
       } else {
-        setCompanies([...companies, { name }]);
+        if (user) {
+          (async () => {
+            try {
+              const res = await fetch('/api/contacts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'companies', name: item.name }) });
+              if (!res.ok) throw new Error('Failed');
+              const json = await res.json().catch(() => null);
+              if (json && json.contact) setCompanies([...companies, json.contact]); else setCompanies([...companies, item]);
+            } catch (e) { setCompanies([...companies, item]); }
+          })();
+        } else {
+          setCompanies([...companies, { name }]);
+        }
       }
     } else if (active === 'setor') {
       if (!name) return;
+      const item = { name } as any;
       if (editingIndex !== null) {
-        setSetor(setor.map((s, i) => i === editingIndex ? { name } : s));
+        const existing = setor[editingIndex] as any;
+        if (user && existing && existing.id) {
+          (async () => {
+            try {
+              const res = await fetch(`/api/contacts/${existing.id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+              if (res.ok) {
+                const json = await res.json().catch(() => null);
+                if (json && json.contact) setSetor(setor.map((s:any,i:number)=> i===editingIndex ? json.contact : s)); else setSetor(setor.map((s:any,i:number)=> i===editingIndex ? item : s));
+              } else setSetor(setor.map((s:any,i:number)=> i===editingIndex ? item : s));
+            } catch (e) { setSetor(setor.map((s:any,i:number)=> i===editingIndex ? item : s)); }
+          })();
+        } else {
+          setSetor(setor.map((s:any,i:number)=> i===editingIndex ? { name } : s));
+        }
         setEditingIndex(null);
       } else {
-        setSetor([...setor, { name }]);
+        if (user) {
+          (async () => {
+            try {
+              const res = await fetch('/api/contacts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'setor', name: item.name }) });
+              if (!res.ok) throw new Error('Failed');
+              const json = await res.json().catch(() => null);
+              if (json && json.contact) setSetor([...setor, json.contact]); else setSetor([...setor, item]);
+            } catch (e) { setSetor([...setor, item]); }
+          })();
+        } else {
+          setSetor([...setor, { name }]);
+        }
       }
     } else if (active === 'cargos') {
       if (!name) return;
+      const item = { name } as any;
       if (editingIndex !== null) {
-        setCargos(cargos.map((c, i) => i === editingIndex ? { name } : c));
+        const existing = cargos[editingIndex] as any;
+        if (user && existing && existing.id) {
+          (async () => {
+            try {
+              const res = await fetch(`/api/contacts/${existing.id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+              if (res.ok) {
+                const json = await res.json().catch(() => null);
+                if (json && json.contact) setCargos(cargos.map((c:any,i:number)=> i===editingIndex ? json.contact : c)); else setCargos(cargos.map((c:any,i:number)=> i===editingIndex ? item : c));
+              } else setCargos(cargos.map((c:any,i:number)=> i===editingIndex ? item : c));
+            } catch (e) { setCargos(cargos.map((c:any,i:number)=> i===editingIndex ? item : c)); }
+          })();
+        } else {
+          setCargos(cargos.map((c:any,i:number)=> i===editingIndex ? { name } : c));
+        }
         setEditingIndex(null);
       } else {
-        setCargos([...cargos, { name }]);
+        if (user) {
+          (async () => {
+            try {
+              const res = await fetch('/api/contacts', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'cargos', name: item.name }) });
+              if (!res.ok) throw new Error('Failed');
+              const json = await res.json().catch(() => null);
+              if (json && json.contact) setCargos([...cargos, json.contact]); else setCargos([...cargos, item]);
+            } catch (e) { setCargos([...cargos, item]); }
+          })();
+        } else {
+          setCargos([...cargos, { name }]);
+        }
       }
     }
     setName(''); setNumber('');
   }
 
   async function removeItem(idx: number) {
-    if (!user) return;
+    if (!user) {
+      // when unauthenticated, allow local removals only
+      if (active === 'ramais') {
+        const it = ramais[idx];
+        if (it && it.id) {
+          // cannot delete remote without auth
+        }
+        setRamais(ramais.filter((_, i) => i !== idx));
+        return;
+      }
+      if (active === 'departments') setDepartments(departments.filter((_, i) => i !== idx));
+      if (active === 'companies') setCompanies(companies.filter((_, i) => i !== idx));
+      if (active === 'setor') setSetor(setor.filter((_, i) => i !== idx));
+      if (active === 'cargos') setCargos(cargos.filter((_, i) => i !== idx));
+      return;
+    }
     if (active === 'ramais') {
       const it = ramais[idx];
       if (it && it.id) {
@@ -617,10 +747,67 @@ export default function ContactsPage() {
       }
       return;
     }
-    if (active === 'departments') setDepartments(departments.filter((_, i) => i !== idx));
-    if (active === 'companies') setCompanies(companies.filter((_, i) => i !== idx));
-    if (active === 'setor') setSetor(setor.filter((_, i) => i !== idx));
-    if (active === 'cargos') setCargos(cargos.filter((_, i) => i !== idx));
+    // handle other kinds: if item is DB-backed (has id) delete via API, otherwise local
+    if (active === 'departments') {
+      const it = departments[idx] as any;
+      if (it && it.id) {
+        try {
+          const res = await fetch(`/api/contacts/${it.id}`, { method: 'DELETE', credentials: 'include' });
+          if (res.ok) {
+            const r = await fetch('/api/contacts');
+            if (r.ok) {
+              const data = await r.json().catch(() => null);
+              if (data && Array.isArray(data.departments)) setDepartments(data.departments);
+            }
+          } else setDepartments(departments.filter((_, i) => i !== idx));
+        } catch (e) { setDepartments(departments.filter((_, i) => i !== idx)); }
+      } else setDepartments(departments.filter((_, i) => i !== idx));
+    }
+    if (active === 'companies') {
+      const it = companies[idx] as any;
+      if (it && it.id) {
+        try {
+          const res = await fetch(`/api/contacts/${it.id}`, { method: 'DELETE', credentials: 'include' });
+          if (res.ok) {
+            const r = await fetch('/api/contacts');
+            if (r.ok) {
+              const data = await r.json().catch(() => null);
+              if (data && Array.isArray(data.companies)) setCompanies(data.companies);
+            }
+          } else setCompanies(companies.filter((_, i) => i !== idx));
+        } catch (e) { setCompanies(companies.filter((_, i) => i !== idx)); }
+      } else setCompanies(companies.filter((_, i) => i !== idx));
+    }
+    if (active === 'setor') {
+      const it = setor[idx] as any;
+      if (it && it.id) {
+        try {
+          const res = await fetch(`/api/contacts/${it.id}`, { method: 'DELETE', credentials: 'include' });
+          if (res.ok) {
+            const r = await fetch('/api/contacts');
+            if (r.ok) {
+              const data = await r.json().catch(() => null);
+              if (data && Array.isArray(data.setor)) setSetor(data.setor);
+            }
+          } else setSetor(setor.filter((_, i) => i !== idx));
+        } catch (e) { setSetor(setor.filter((_, i) => i !== idx)); }
+      } else setSetor(setor.filter((_, i) => i !== idx));
+    }
+    if (active === 'cargos') {
+      const it = cargos[idx] as any;
+      if (it && it.id) {
+        try {
+          const res = await fetch(`/api/contacts/${it.id}`, { method: 'DELETE', credentials: 'include' });
+          if (res.ok) {
+            const r = await fetch('/api/contacts');
+            if (r.ok) {
+              const data = await r.json().catch(() => null);
+              if (data && Array.isArray(data.cargos)) setCargos(data.cargos);
+            }
+          } else setCargos(cargos.filter((_, i) => i !== idx));
+        } catch (e) { setCargos(cargos.filter((_, i) => i !== idx)); }
+      } else setCargos(cargos.filter((_, i) => i !== idx));
+    }
   }
 
   function editItem(idx: number) {
@@ -773,18 +960,20 @@ export default function ContactsPage() {
           <CardContent>
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <div className="flex gap-2 flex-wrap">
-                  {sections.map(s => (
-                    <button
-                      key={s.key}
-                      onClick={() => setActive(s.key)}
-                      className={`px-3 py-2 rounded-md text-sm flex items-center gap-2 ${active===s.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
-                    >
-                      <s.icon className="h-4 w-4" />
-                      <span>{s.title}</span>
-                    </button>
-                  ))}
-                </div>
+                {user ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {sections.map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setActive(s.key)}
+                        className={`px-3 py-2 rounded-md text-sm flex items-center gap-2 ${active===s.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+                      >
+                        <s.icon className="h-4 w-4" />
+                        <span>{s.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                   <div>
                   {user ? (
                     <div className="flex items-center gap-2">

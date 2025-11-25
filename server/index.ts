@@ -4,7 +4,7 @@ import MemoryStore from "memorystore";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from './db';
-import { users } from '@shared/schema';
+import { users, groups } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { registerRoutes } from "./routes";
@@ -63,7 +63,20 @@ passport.use(new LocalStrategy((username, password, done) => {
         // Check both camelCase and snake_case field names for compatibility
         const storedHash = user.passwordHash || user.password_hash;
         if (hash === storedHash) {
-          const permissions = user.permissions ? JSON.parse(user.permissions) : [];
+          // Resolve permissions from user's explicit permissions or their group
+          let permissions: string[] = [];
+          try {
+            if (user.permissions) permissions = JSON.parse(user.permissions);
+            if ((!permissions || permissions.length === 0) && user.role) {
+              const rows = await db.select().from(groups).where(eq(groups.id, user.role));
+              if (Array.isArray(rows) && rows.length) {
+                const gp = rows[0].permissions;
+                permissions = gp ? JSON.parse(gp) : [];
+              }
+            }
+          } catch (e) {
+            permissions = [];
+          }
           return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
         }
         return done(null, false, { message: 'Invalid credentials' });
@@ -76,11 +89,23 @@ passport.use(new LocalStrategy((username, password, done) => {
 
 passport.serializeUser((user: any, done) => done(null, user.id));
 passport.deserializeUser((id: any, done) => {
-  db.select().from(users).where(eq(users.id, id)).then((rows: any[]) => {
+  db.select().from(users).where(eq(users.id, id)).then(async (rows: any[]) => {
     const user = rows[0];
     if (!user) return done(null, false);
-    const permissions = user.permissions ? JSON.parse(user.permissions) : [];
-    return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
+    try {
+      let permissions: string[] = [];
+      if (user.permissions) permissions = user.permissions ? JSON.parse(user.permissions) : [];
+      if ((!permissions || permissions.length === 0) && user.role) {
+        const grows = await db.select().from(groups).where(eq(groups.id, user.role));
+        if (Array.isArray(grows) && grows.length) {
+          const gp = grows[0].permissions;
+          permissions = gp ? JSON.parse(gp) : [];
+        }
+      }
+      return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
+    } catch (e) {
+      return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions: [] });
+    }
   }).catch((err: any) => done(err));
 });
 

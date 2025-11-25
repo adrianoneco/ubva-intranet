@@ -80,7 +80,7 @@ export default function SettingsPage() {
   const [editingUserPassword, setEditingUserPassword] = React.useState('');
   const [editingUserRole, setEditingUserRole] = React.useState('viewer');
   const [editingUserPerms, setEditingUserPerms] = React.useState<string[]>([]);
-  const [editingUserTab, setEditingUserTab] = React.useState<'geral'|'permissoes'>('geral');
+  // per-user permissions UI removed; users are linked to groups (role)
   // Groups (roles) with permissions
   type Group = { id: string; name: string; permissions: string[] };
   const [groups, setGroups] = React.useState<Group[]>([]);
@@ -91,17 +91,17 @@ export default function SettingsPage() {
       if (Array.isArray(data)) setGroups(data.map((g: any) => ({ id: g.id, name: g.name, permissions: g.permissions || [] })));
       // fallback to defaults if empty
       if (mounted && Array.isArray(data) && data.length === 0) {
-        setGroups([
-          { id: 'admin', name: 'Admin', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','contacts:delete','calendar:view','calendar:create','calendar:edit','calendar:delete','settings:view','settings:edit','users:view','users:manage','groups:manage'] },
-          { id: 'editor', name: 'Editor', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','calendar:view','calendar:create','calendar:edit','settings:view'] },
-          { id: 'viewer', name: 'Viewer', permissions: ['dashboard:view','contacts:view','calendar:view'] },
+            setGroups([
+              { id: 'admin', name: 'Admin', permissions: ['dashboard:view','cards:view','cards:create','cards:edit','cards:delete','tasks:view','tasks:create','tasks:edit','tasks:delete','contacts:view','contacts:create','contacts:edit','contacts:delete','calendar:view','calendar:create','calendar:edit','calendar:delete','settings:view','settings:edit','users:view','users:manage','groups:manage'] },
+              { id: 'editor', name: 'Editor', permissions: ['dashboard:view','cards:view','cards:create','cards:edit','tasks:view','tasks:create','contacts:view','contacts:create','contacts:edit','calendar:view','calendar:create','calendar:edit','settings:view'] },
+              { id: 'viewer', name: 'Viewer', permissions: ['dashboard:view','cards:view','tasks:view','contacts:view','calendar:view'] },
         ]);
       }
     }).catch(() => {
       setGroups([
-        { id: 'admin', name: 'Admin', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','contacts:delete','calendar:view','calendar:create','calendar:edit','calendar:delete','settings:view','settings:edit','users:view','users:manage','groups:manage'] },
-        { id: 'editor', name: 'Editor', permissions: ['dashboard:view','contacts:view','contacts:create','contacts:edit','calendar:view','calendar:create','calendar:edit','settings:view'] },
-        { id: 'viewer', name: 'Viewer', permissions: ['dashboard:view','contacts:view','calendar:view'] },
+        { id: 'admin', name: 'Admin', permissions: ['dashboard:view','cards:view','cards:create','cards:edit','cards:delete','tasks:view','tasks:create','tasks:edit','tasks:delete','contacts:view','contacts:create','contacts:edit','contacts:delete','calendar:view','calendar:create','calendar:edit','calendar:delete','settings:view','settings:edit','users:view','users:manage','groups:manage'] },
+        { id: 'editor', name: 'Editor', permissions: ['dashboard:view','cards:view','cards:create','cards:edit','tasks:view','tasks:create','contacts:view','contacts:create','contacts:edit','calendar:view','calendar:create','calendar:edit','settings:view'] },
+        { id: 'viewer', name: 'Viewer', permissions: ['dashboard:view','cards:view','tasks:view','contacts:view','calendar:view'] },
       ]);
     });
     return () => { mounted = false; };
@@ -341,7 +341,7 @@ export default function SettingsPage() {
     (async () => {
       try {
         if (editingUserId) {
-          const payload: any = { displayName: editingUserName, email: editingUserEmail, role: editingUserRole, permissions: editingUserPerms };
+          const payload: any = { displayName: editingUserName, email: editingUserEmail, role: editingUserRole };
           const trimmedPassword = editingUserPassword.trim();
           if (trimmedPassword.length > 0) {
             payload.password = trimmedPassword;
@@ -349,10 +349,15 @@ export default function SettingsPage() {
           const res = await fetch(`/api/admin/users/${editingUserId}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           if (!res.ok) throw new Error('failed');
           const data = await res.json();
-          setUsers(u => u.map(x => x.id === editingUserId ? ({ ...x, name: data.user.displayName || data.user.username, email: data.user.email || '', role: data.user.role, permissions: data.user.permissions || [] }) : x));
+          // derive permissions on client from groups if available
+          const userRole = data.user.role;
+          let derivedPerms: string[] = [];
+          const g = groups.find(x => x.id === userRole);
+          if (g) derivedPerms = g.permissions || [];
+          setUsers(u => u.map(x => x.id === editingUserId ? ({ ...x, name: data.user.displayName || data.user.username, email: data.user.email || '', role: data.user.role, permissions: derivedPerms }) : x));
           toast({ title: 'Atualizado', description: trimmedPassword.length > 0 ? 'Senha alterada com sucesso' : undefined });
         } else {
-          const payload: any = { displayName: editingUserName, email: editingUserEmail, role: editingUserRole, permissions: editingUserPerms };
+          const payload: any = { displayName: editingUserName, email: editingUserEmail, role: editingUserRole };
           const trimmedPassword = editingUserPassword.trim();
           if (trimmedPassword.length > 0) {
             payload.password = trimmedPassword;
@@ -360,8 +365,9 @@ export default function SettingsPage() {
           const res = await fetch('/api/admin/users', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           if (!res.ok) throw new Error('failed');
           const data = await res.json();
-          setUsers(u => [{ id: data.user.id, name: data.user.displayName || data.user.username, email: data.user.email || '', role: data.user.role, permissions: data.user.permissions || [] }, ...u]);
-          // if server returned a generated password, show it in a toast so admin can copy it
+          const g = groups.find(x => x.id === data.user.role);
+          const derivedPerms = g ? g.permissions || [] : [];
+          setUsers(u => [{ id: data.user.id, name: data.user.displayName || data.user.username, email: data.user.email || '', role: data.user.role, permissions: derivedPerms }, ...u]);
           if (data.password) {
             toast({ title: 'Criado', description: `Senha gerada: ${data.password}` });
           } else {
@@ -637,11 +643,10 @@ export default function SettingsPage() {
             </DialogHeader>
             <div className="mb-2">
               <div className="flex gap-2">
-                <button onClick={()=>setEditingUserTab('geral')} className={`px-2 py-1 rounded ${editingUserTab==='geral' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/10'}`}>Geral</button>
-                <button onClick={()=>setEditingUserTab('permissoes')} className={`px-2 py-1 rounded ${editingUserTab==='permissoes' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/10'}`}>Permissões</button>
+                <div className="px-2 py-1 rounded bg-primary text-primary-foreground">Geral</div>
               </div>
             </div>
-            {editingUserTab === 'geral' ? (
+            <div>
               <div className="grid grid-cols-1 gap-2">
                 <div>
                   <Label>Nome</Label>
