@@ -9,14 +9,16 @@ import AgendamentoPage from "@/pages/agendamento";
 import SettingsPage from "@/pages/settings";
 import { apiRequest } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { EditableCard } from "@/components/editable-card";
 import CardEditorModal, { CardData } from "@/components/card-editor-modal";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import type { Card as CardType } from "@shared/schema";
-import { Globe } from "lucide-react";
+import { Globe, LogOut } from "lucide-react";
 
 function App() {
   const style = {
@@ -156,6 +158,11 @@ function App() {
   // client-side guard: redirect to /login when unauthenticated users access protected SPA routes
   React.useEffect(() => {
     try {
+      // Skip if already on login page or loading
+      if (location.startsWith('/login') || auth.loading) {
+        return;
+      }
+      
       // Dashboard (/app) and contacts are public, no authentication required
       if (!user) {
         // Only redirect to login for protected routes (agendamento, settings)
@@ -175,7 +182,7 @@ function App() {
         return;
       }
     } catch (e) {}
-  }, [location, user, setLocation, auth]);
+  }, [location, user, setLocation, auth, auth.loading]);
 
   function handleEdit(id: string) {
     const card = cards.find((c) => String(c.id) === id);
@@ -345,14 +352,29 @@ function App() {
               <div className="flex items-center gap-2">
                   <ThemeToggle />
                   {user ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">{user.username}</span>
-                      <button className="btn btn-ghost" onClick={async () => {
-                        try {
-                          await auth.logout();
-                        } catch (e) {}
-                        setLocation('/');
-                      }}>Sair</button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((user as any).displayName || user.username)}`} alt={(user as any).displayName || user.username} />
+                          <AvatarFallback />
+                        </Avatar>
+                        <span className="text-sm font-medium">{(user as any).displayName || user.username}</span>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={async () => {
+                            try {
+                              await auth.logout();
+                            } catch (e) {}
+                            setLocation('/');
+                          }}>
+                            <LogOut className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Sair</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   ) : (
                     <React.Suspense fallback={null}>

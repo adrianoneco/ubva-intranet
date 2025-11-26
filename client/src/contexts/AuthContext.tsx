@@ -54,16 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = data.user ?? null;
       setUser(userData);
       setLoading(false);
-      // Force a refresh to ensure permissions are loaded
-      if (userData) {
-        await refresh();
-      }
       return userData;
     } catch (e) {
       setLoading(false);
       throw e;
     }
-  }, [refresh]);
+  }, []);
 
   const logout = React.useCallback(async () => {
     try {
