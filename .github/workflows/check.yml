@@ -26,12 +26,13 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
+
+          # Executa testes, mas nunca quebra o workflow
           bun test --coverage > test_output.txt 2>&1 || true
-          
-          # Se $? vier vazio, força código 1
+
           CODE=$?
           if [ -z "$CODE" ]; then CODE=1; fi
-          
+
           echo "code=$CODE" >> $GITHUB_OUTPUT
 
       - name: Prepare message
@@ -45,11 +46,19 @@ jobs:
             RESULT="❌ *FALHA NOS TESTES*"
           fi
 
-          # Escapa logs para JSON
+          # Se o arquivo vier vazio, coloca texto padrão
+          if [ ! -s test_output.txt ]; then
+            echo "No logs collected." > test_output.txt
+          fi
+
+          # Escapar logs corretamente:
+          # 1) Escapa aspas
+          # 2) Converte quebras de linha para \n
           LOGS=$(sed 's/"/\\"/g' test_output.txt | sed ':a;N;$!ba;s/\n/\\n/g')
 
-          MESSAGE="$RESULT\n\n*Logs:*\n\`\`\`\n$LOGS\n\`\`\`"
+          MESSAGE="*GitHub - Copilot Check Project*\n\n$RESULT\n\n*Logs:*\n\`\`\`\n$LOGS\n\`\`\`"
 
+          # Salva como output do GitHub
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Send WhatsApp Message
