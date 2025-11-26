@@ -879,7 +879,7 @@ export default function AgendamentoPage() {
                           }
 
                           return (
-                            <div key={it.id} className={`group relative flex items-start justify-between bg-muted dark:bg-white/5 p-3 pl-6 pr-20 rounded text-sm border border-transparent dark:border-white/5 ${bookingIsExpired ? 'opacity-60' : ''}`}>
+                            <div key={it.id} className={`group relative flex items-start justify-between bg-muted dark:bg-white/5 p-3 pl-6 pr-3 rounded text-sm border border-transparent dark:border-white/5 ${bookingIsExpired ? 'opacity-60' : ''}`}>
                               {/* left status indicator */}
                               {(() => {
                                 const s = it.status || 'agendado';
@@ -893,24 +893,25 @@ export default function AgendamentoPage() {
                                 <div className="text-xs text-muted-foreground">Criado por: {it.userDisplayName || it.userId || 'Desconhecido'} em {getDate(it.createdAt as any)} às {getTime(it.createdAt as any)}</div>
                               </div>
 
-                              {/* right side - time and actions */}
-                              <div className="flex flex-col items-end gap-2">
-                                {/* time display */}
-                                <div className="text-2xl font-bold text-foreground/80">
-                                  {it.time || '-'}
+                              {/* right side - time, status badge below, actions on side */}
+                              <div className="flex items-start gap-3">
+                                {/* action buttons on the side */}
+                                <div className="flex items-center gap-1 mt-1">
+                                  <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label="Editar" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
+                                    <Edit3 className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDelete(it.id)} aria-label="Remover" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                                
-                                {/* status badge and actions */}
-                                <div className="flex items-center gap-2">
-                                  <div className={`px-2 py-1 rounded text-white text-xs whitespace-nowrap ${it.status === 'confirmado' ? 'bg-lime-600' : it.status === 'entregue' ? 'bg-emerald-600' : it.status === 'cancelado' ? 'bg-red-600' : 'bg-purple-600'}`}>{it.status || 'agendado'}</div>
-                                  <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label="Editar" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
-                                      <Edit3 className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(it.id)} aria-label="Remover" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
+
+                                <div className="flex flex-col items-end gap-1">
+                                  {/* time display */}
+                                  <div className="text-2xl font-bold text-foreground/80">
+                                    {it.time || '-'}
                                   </div>
+                                  {/* status badge below time */}
+                                  <div className={`px-2 py-1 rounded text-white text-xs whitespace-nowrap ${it.status === 'confirmado' ? 'bg-lime-600' : it.status === 'entregue' ? 'bg-emerald-600' : it.status === 'cancelado' ? 'bg-red-600' : 'bg-purple-600'}`}>{it.status || 'agendado'}</div>
                                 </div>
                               </div>
                             </div>
