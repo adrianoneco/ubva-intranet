@@ -1,0 +1,55 @@
+name: Test Project with Bun and Notify WhatsApp
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: |
+          bun test --coverage > test_output.txt 2>&1
+          echo "status=$?" >> $GITHUB_OUTPUT
+
+      - name: Prepare message
+        id: message
+        run: |
+          STATUS=${{ steps.tests.outputs.status }}
+          if [ "$STATUS" -eq 0 ]; then
+            RESULT="✅ *TESTES PASSARAM COM SUCESSO*"
+          else
+            RESULT="❌ *FALHA NOS TESTES*"
+          fi
+
+          LOGS="$(sed 's/"/\\"/g' test_output.txt)"
+          MESSAGE="$RESULT\n\n*Logs:*\n\`\`\`\n$LOGS\n\`\`\`"
+
+          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+
+      - name: Send WhatsApp Notification
+        run: |
+          curl --request POST \
+            --url "https://${{ secrets.EVOLUTION_ENDPOINT }}/message/sendText/${{ secrets.INSTANCE_NAME }}" \
+            --header "Content-Type: application/json" \
+            --header "apikey: ${{ secrets.EVOLUTION_API_KEY }}" \
+            --data "{
+              \"number\": \"${{ secrets.REMOTEJID }}\",
+              \"text\": \"${{ steps.message.outputs.msg }}\"
+            }"
