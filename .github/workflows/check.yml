@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Bun
@@ -25,25 +25,34 @@ jobs:
         id: tests
         continue-on-error: true
         run: |
-          bun test --coverage > test_output.txt 2>&1
-          echo "status=$?" >> $GITHUB_OUTPUT
+          set -o pipefail
+          bun test --coverage > test_output.txt 2>&1 || true
+          
+          # Se $? vier vazio, força código 1
+          CODE=$?
+          if [ -z "$CODE" ]; then CODE=1; fi
+          
+          echo "code=$CODE" >> $GITHUB_OUTPUT
 
       - name: Prepare message
         id: message
         run: |
-          STATUS=${{ steps.tests.outputs.status }}
-          if [ "$STATUS" -eq 0 ]; then
+          CODE="${{ steps.tests.outputs.code }}"
+
+          if [ "$CODE" = "0" ]; then
             RESULT="✅ *TESTES PASSARAM COM SUCESSO*"
           else
             RESULT="❌ *FALHA NOS TESTES*"
           fi
 
-          LOGS="$(sed 's/"/\\"/g' test_output.txt)"
+          # Escapa logs para JSON
+          LOGS=$(sed 's/"/\\"/g' test_output.txt | sed ':a;N;$!ba;s/\n/\\n/g')
+
           MESSAGE="$RESULT\n\n*Logs:*\n\`\`\`\n$LOGS\n\`\`\`"
 
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
-      - name: Send WhatsApp Notification
+      - name: Send WhatsApp Message
         run: |
           curl --request POST \
             --url "https://${{ secrets.EVOLUTION_ENDPOINT }}/message/sendText/${{ secrets.INSTANCE_NAME }}" \
