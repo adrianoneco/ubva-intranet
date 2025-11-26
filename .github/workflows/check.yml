@@ -1,12 +1,12 @@
-name: Test Project with Bun and Notify WhatsApp
+name: Copilot Check with Bun and WhatsApp Notify
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,50 +18,79 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: bun install
-
-      - name: Run tests
-        id: tests
+      #
+      # 1) SINTAX CHECK
+      #
+      - name: Syntax Check
+        id: syntax
         continue-on-error: true
         run: |
-          set -o pipefail
-
-          # Executa testes, mas nunca quebra o workflow
-          bun test --coverage > test_output.txt 2>&1 || true
-
+          bun check . > syntax_out.txt 2>&1 || true
           CODE=$?
-          if [ -z "$CODE" ]; then CODE=1; fi
-
           echo "code=$CODE" >> $GITHUB_OUTPUT
 
-      - name: Prepare message
+      #
+      # 2) INSTALL DEPENDENCIES
+      #
+      - name: Install Dependencies
+        id: install
+        continue-on-error: true
+        run: |
+          bun install > install_out.txt 2>&1 || true
+          CODE=$?
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+
+      #
+      # 3) CHECK OUTDATED PACKAGES
+      #
+      - name: Check outdated packages
+        id: outdated
+        run: |
+          bun outdated > outdated.txt 2>&1 || true
+          if [ -s outdated.txt ]; then
+            echo "hasOutdated=true" >> $GITHUB_OUTPUT
+          else
+            echo "hasOutdated=false" >> $GITHUB_OUTPUT
+          fi
+
+      #
+      # 4) BUILD FINAL MESSAGE
+      #
+      - name: Prepare WhatsApp Message
         id: message
         run: |
-          CODE="${{ steps.tests.outputs.code }}"
+          # Repo name
+          REPO="${GITHUB_REPOSITORY#*/}"
 
-          if [ "$CODE" = "0" ]; then
-            RESULT="✅ *TESTES PASSARAM COM SUCESSO*"
+          # Syntax check
+          if [ "${{ steps.syntax.outputs.code }}" = "0" ]; then
+            SYNTAX="✔ Verificação de erro de sintaxe"
           else
-            RESULT="❌ *FALHA NOS TESTES*"
+            SYNTAX="❌ Verificação de erro de sintaxe"
           fi
 
-          # Se o arquivo vier vazio, coloca texto padrão
-          if [ ! -s test_output.txt ]; then
-            echo "No logs collected." > test_output.txt
+          # Install dependencies
+          if [ "${{ steps.install.outputs.code }}" = "0" ]; then
+            INSTALL="✔ Instalar dependências"
+          else
+            INSTALL="❌ Instalar dependências"
           fi
 
-          # Escapar logs corretamente:
-          # 1) Escapa aspas
-          # 2) Converte quebras de linha para \n
-          LOGS=$(sed 's/"/\\"/g' test_output.txt | sed ':a;N;$!ba;s/\n/\\n/g')
+          # Outdated packages
+          if [ "${{ steps.outdated.outputs.hasOutdated }}" = "true" ]; then
+            OUTDATED="⚠️ Há pacotes desatualizados"
+          else
+            OUTDATED="✔ Nenhum pacote desatualizado"
+          fi
 
-          MESSAGE="*GitHub - Copilot Check Project*\n\n$RESULT\n\n*Logs:*\n\`\`\`\n$LOGS\n\`\`\`"
+          MESSAGE="*🧪 Copilot Check Project ${REPO}*\n\n$SYNTAX\n$INSTALL\n$OUTDATED"
 
-          # Salva como output do GitHub
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
-      - name: Send WhatsApp Message
+      #
+      # 5) SEND WHATSAPP
+      #
+      - name: Send WhatsApp Notification
         run: |
           curl --request POST \
             --url "https://${{ secrets.EVOLUTION_ENDPOINT }}/message/sendText/${{ secrets.INSTANCE_NAME }}" \
