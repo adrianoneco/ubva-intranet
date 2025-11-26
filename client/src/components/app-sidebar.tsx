@@ -56,15 +56,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-6">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-            <Globe className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">INTRANET</h1>
-            <p className="text-xs text-muted-foreground">UBVA</p>
-          </div>
+      <SidebarHeader className="p-2">
+        <div className="flex items-center justify-center">
+          <img src="/ubva-logo.png" alt="UBVA Logo" className="h-12 object-contain" />
         </div>
       </SidebarHeader>
       <SidebarContent>

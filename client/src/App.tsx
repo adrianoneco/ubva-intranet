@@ -16,6 +16,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { EditableCard } from "@/components/editable-card";
 import CardEditorModal, { CardData } from "@/components/card-editor-modal";
 import type { Card as CardType } from "@shared/schema";
+import { Globe } from "lucide-react";
 
 function App() {
   const style = {
@@ -314,6 +315,18 @@ function App() {
     );
   }
 
+  // Login page doesn't need sidebar/header
+  if (location.startsWith('/login')) {
+    return (
+      <>
+        <TooltipProvider>
+          {content}
+          <Toaster />
+        </TooltipProvider>
+      </>
+    );
+  }
+
   return (
     <>
       <TooltipProvider>
@@ -322,8 +335,12 @@ function App() {
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
             <header className="flex items-center justify-between p-4 border-b bg-background">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
+                <div className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-primary" />
+                  <span className="font-semibold text-lg">INTRANET</span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                   <ThemeToggle />

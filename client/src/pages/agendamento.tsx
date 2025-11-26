@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Trash2, Edit3 } from 'lucide-react';
+import { Trash2, Edit3, Search, SortAsc, SortDesc } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,7 +18,8 @@ type Pickup = {
   clientId: string;
   clientName: string;
   orderId: string;
-  userId?: string; // who created
+  userId?: string; // who created (username)
+  userDisplayName?: string; // display name of creator
     createdAt: string;
     scheduledAt?: string; // ISO datetime for the scheduled slot (date+time)
 };
@@ -75,6 +77,11 @@ export default function AgendamentoPage() {
   const [modalStatus, setModalStatus] = React.useState<'agendado' | 'confirmado' | 'entregue' | 'cancelado'>('agendado');
   // tri-state: null = show both on small screens, true = show calendar only, false = show slots only
   const [showCalendarOnMobile, setShowCalendarOnMobile] = React.useState<boolean | null>(null);
+  // Filter and sort states
+  const [filterStatus, setFilterStatus] = React.useState<string>('todos');
+  const [filterSearch, setFilterSearch] = React.useState<string>('');
+  const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('desc');
+  const [daySortOrder, setDaySortOrder] = React.useState<Record<string, 'asc' | 'desc'>>({});
 
   function resetForm() {
     setDate(''); setTime(''); setClientId(''); setClientName(''); setOrderId('');
@@ -92,6 +99,25 @@ export default function AgendamentoPage() {
     } catch (e) {
       return { interval: 15, startTime: '08:00', endTime: '17:00', workingDays: [1,2,3,4,5] };
     }
+  }
+
+  function formatDateWithWeekday(iso: string) {
+    const date = parseIsoToLocal(iso);
+    const weekdays = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+    const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    
+    const dayOfWeek = weekdays[date.getDay()];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    
+    return `${dayOfWeek}, ${day} de ${month}`;
+  }
+
+  function toggleDaySort(dateKey: string) {
+    setDaySortOrder(prev => ({
+      ...prev,
+      [dateKey]: prev[dateKey] === 'asc' ? 'desc' : 'asc'
+    }));
   }
 
   function generateTimeSlots() {
@@ -219,6 +245,7 @@ export default function AgendamentoPage() {
         status: modalStatus || 'agendado',
         orderId: modalOrderTags.join(','),
         userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+        userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
         createdAt: new Date().toISOString(),
         scheduledAt: `${useDate}T${time}:00`,
       };
@@ -276,6 +303,7 @@ export default function AgendamentoPage() {
       status: 'agendado',
       orderId: modalOrderTags.join(','),
       userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+      userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
         createdAt: new Date().toISOString(),
         scheduledAt: time ? `${useDate}T${time}:00` : undefined,
     };
@@ -372,6 +400,7 @@ export default function AgendamentoPage() {
           status: 'agendado',
           orderId: modalOrderTags.join(',') || modalOrderId || orderId || '',
           userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+          userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
           createdAt: new Date().toISOString(),
           scheduledAt: `${d}T${chosen}:00`,
         };
@@ -389,18 +418,47 @@ export default function AgendamentoPage() {
     setRangeModalOpen(false);
   }
 
-  // Group by date for a simple calendar view
+  // Filter and sort pickups
+  const filteredAndSortedPickups = React.useMemo(() => {
+    let filtered = [...pickups];
+    
+    // Apply status filter
+    if (filterStatus !== 'todos') {
+      filtered = filtered.filter(p => (p.status || 'agendado') === filterStatus);
+    }
+    
+    // Apply search filter (searches in clientName, clientId, and orderId)
+    if (filterSearch.trim()) {
+      const search = filterSearch.toLowerCase();
+      filtered = filtered.filter(p => 
+        (p.clientName || '').toLowerCase().includes(search) ||
+        (p.clientId || '').toLowerCase().includes(search) ||
+        (p.orderId || '').toLowerCase().includes(search)
+      );
+    }
+    
+    // Sort by date and time
+    filtered.sort((a, b) => {
+      const dateA = a.scheduledAt || `${a.date}T${a.time || '00:00'}:00`;
+      const dateB = b.scheduledAt || `${b.date}T${b.time || '00:00'}:00`;
+      const comparison = new Date(dateA).getTime() - new Date(dateB).getTime();
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [pickups, filterStatus, filterSearch, sortOrder]);
+
+  // Group filtered pickups by date
   const grouped = React.useMemo(() => {
     const map: Record<string, Pickup[]> = {};
-    for (const p of pickups) {
+    for (const p of filteredAndSortedPickups) {
       const k = p.date;
       map[k] = map[k] || [];
       map[k].push(p);
     }
-    // sort dates desc
-    const entries = Object.entries(map).sort((a,b)=> new Date(b[0]).getTime() - new Date(a[0]).getTime());
-    return entries;
-  }, [pickups]);
+    // dates are already sorted by filteredAndSortedPickups
+    return Object.entries(map);
+  }, [filteredAndSortedPickups]);
 
   const monthMatrix = getMonthMatrix(calendarMonth);
 
@@ -614,7 +672,7 @@ export default function AgendamentoPage() {
                             <div className="text-sm font-medium">{booking.clientName} <span className="text-xs text-muted-foreground">(#{booking.clientId})</span></div>
                             <div className="text-xs">Pedido: {booking.orderId}</div>
                             <div className="text-xs">Status: {booking.status || 'agendado'}</div>
-                            <div className="text-xs text-muted-foreground">Criado por: {booking.userId}</div>
+                            <div className="text-xs text-muted-foreground">Criado por: {booking.userDisplayName || booking.userId || 'Desconhecido'}</div>
                           </TooltipContent>
                         </Tooltip>
                       );
@@ -637,17 +695,73 @@ export default function AgendamentoPage() {
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 mt-4">
           <Card className="bg-white/5 dark:bg-white/5 backdrop-blur-sm border border-white/10 dark:border-white/20">
             <CardHeader>
-              <CardTitle>Agendamentos existentes</CardTitle>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <CardTitle>Agendamentos existentes</CardTitle>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                  {/* Search filter */}
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar cliente, pedido..."
+                      value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                  
+                  {/* Status filter */}
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="agendado">Agendado</SelectItem>
+                      <SelectItem value="confirmado">Confirmado</SelectItem>
+                      <SelectItem value="entregue">Entregue</SelectItem>
+                      <SelectItem value="cancelado">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  {/* Sort order */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    title={sortOrder === 'asc' ? 'Mais antigos primeiro' : 'Mais recentes primeiro'}
+                  >
+                    {sortOrder === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {grouped.length === 0 ? (<div className="text-sm text-muted-foreground">Nenhum agendamento</div>) : null}
                 {grouped.map(([d, items]) => {
+                  const daySort = daySortOrder[d] || 'asc';
+                  const sortedItems = [...items].sort((a, b) => {
+                    const comparison = (a.time || '').localeCompare(b.time || '');
+                    return daySort === 'asc' ? comparison : -comparison;
+                  });
+                  
                   return (
-                    <div key={d} className="border rounded p-2 text-sm">
-                      <div className="font-medium text-sm">{parseIsoToLocal(d).toLocaleDateString()}</div>
-                      <div className="mt-1 space-y-1">
-                        {items.sort((a,b)=> (a.time||'').localeCompare(b.time||'')).map(it => {
+                    <div key={d} className="border rounded p-3 text-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-base">{formatDateWithWeekday(d)}</div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleDaySort(d)}
+                          className="h-8 px-2"
+                          title={daySort === 'asc' ? 'Ordenar por horário: tarde → manhã' : 'Ordenar por horário: manhã → tarde'}
+                        >
+                          {daySort === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+                          <span className="ml-1 text-xs">Horário</span>
+                        </Button>
+                      </div>
+                      <div className="space-y-1">
+                        {sortedItems.map(it => {
                           const now = Date.now();
                           let bookingIsExpired = false;
                           try {
@@ -674,7 +788,7 @@ export default function AgendamentoPage() {
                               <div className="ml-4">
                                 <div className="text-sm font-medium">{it.clientName} <span className="text-xs text-muted-foreground">(#{it.clientId})</span></div>
                                 <div className="text-xs">Pedido(s): { (it.orderId || '').split(',').map(s=>s.trim()).filter(Boolean).join(', ') } — Hora: {it.time || '-'}</div>
-                                <div className="text-xs text-muted-foreground">Criado por: {it.userId} em {new Date(it.createdAt).toLocaleString()}</div>
+                                <div className="text-xs text-muted-foreground">Criado por: {it.userDisplayName || it.userId || 'Desconhecido'} em {new Date(it.createdAt).toLocaleDateString('pt-BR')} às {new Date(it.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                               </div>
 
                               {/* right status badge - hides on hover to reveal actions */}
@@ -815,8 +929,8 @@ export default function AgendamentoPage() {
                 <Input placeholder="ex. 123" value={modalClientId} onChange={(e:any)=>setModalClientId(e.target.value)} />
               </div>
               <div>
-                <Label className="text-center">Nome do Cliente</Label>
-                <Input placeholder="ex. João Silva" value={modalClientName} onChange={(e:any)=>setModalClientName(e.target.value)} />
+                <Label className="text-center">Nome do Cliente <span className="text-xs text-muted-foreground">(opcional)</span></Label>
+                <Input placeholder="ex. João Silva (opcional)" value={modalClientName} onChange={(e:any)=>setModalClientName(e.target.value)} />
               </div>
               <div>
                 <Label className="text-center">Pedido(s)</Label>
@@ -831,7 +945,7 @@ export default function AgendamentoPage() {
                   </div>
                   <input
                     className="w-full rounded border p-2"
-                    placeholder="Digite e pressione Enter ou use ',' para adicionar"
+                    placeholder="Digite o número do pedido e pressione Enter"
                     value={modalOrderInput}
                     onChange={(e:any)=>{
                       const v = e.target.value;
@@ -847,11 +961,25 @@ export default function AgendamentoPage() {
                       setModalOrderInput(v);
                     }}
                     onKeyDown={(e:any)=>{
-                      if (e.key === 'Enter' || e.key === ',') {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         const v = (modalOrderInput||'').trim().replace(/,$/, '');
                         if (!v) return;
                         if (!modalOrderTags.includes(v)) setModalOrderTags([...modalOrderTags, v]);
+                        setModalOrderInput('');
+                      } else if (e.key === ',') {
+                        e.preventDefault();
+                        const v = (modalOrderInput||'').trim();
+                        if (!v) return;
+                        if (!modalOrderTags.includes(v)) setModalOrderTags([...modalOrderTags, v]);
+                        setModalOrderInput('');
+                      }
+                    }}
+                    onBlur={() => {
+                      // Adiciona automaticamente ao sair do campo se houver texto
+                      const v = (modalOrderInput||'').trim().replace(/,$/, '');
+                      if (v && !modalOrderTags.includes(v)) {
+                        setModalOrderTags([...modalOrderTags, v]);
                         setModalOrderInput('');
                       }
                     }}

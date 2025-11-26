@@ -1,5 +1,5 @@
 SITE PROMPT GENERATION
-generated_at: 2025-11-26T09:59:09.407Z
+generated_at: 2025-11-26T11:38:31.125Z
 
 --- CARDS ---
 id: 1
@@ -70,9 +70,9 @@ section: ramais
   ramal: 4135120654
   departamento: COMERCIAL
   image: /api/files/uploads/1763480412851-ivyqxl.png
-- name: Junior
-  ramal: (41)3512.0652
-  departamento: 
+- name: Junior Cirilo
+  ramal: 4135120652
+  departamento: T.I
 - name: Rogger
   ramal: (41)3512.0648
   departamento: 
@@ -103,6 +103,7 @@ section: ramais
 - name: Adriano Neco
   ramal: 4135120649
   departamento: T.I
+  image: /api/files/uploads/1764153579808-4v9x2u.png
 - name: Generoso
   ramal: (41)3512.0606
   departamento: 
