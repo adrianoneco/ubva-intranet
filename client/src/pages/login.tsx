@@ -15,13 +15,23 @@ export function LoginPage() {
   const [error, setError] = React.useState<string | null>(null);
   const auth = useAuth();
 
+  // Get redirect parameter from URL
+  const getRedirectUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect');
+    return redirect || '/';
+  };
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       const user = await auth.login(email, password);
-      if (user) setLocation('/');
+      if (user) {
+        const redirectUrl = getRedirectUrl();
+        setLocation(redirectUrl);
+      }
     } catch (err: any) {
       setError(err?.message || 'Falha ao entrar');
     } finally {

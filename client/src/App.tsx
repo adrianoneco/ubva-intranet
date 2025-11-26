@@ -160,7 +160,7 @@ function App() {
       if (!user) {
         // Only redirect to login for protected routes (agendamento, settings)
         if (location.startsWith('/agendamento') || location.startsWith('/settings') || location.startsWith('/calendario')) {
-          setLocation('/login');
+          setLocation(`/login?redirect=${encodeURIComponent(location)}`);
         }
         return;
       }
