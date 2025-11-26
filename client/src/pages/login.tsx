@@ -40,9 +40,9 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md">
-        <Card className="border-2 shadow-xl">
+        <Card className="border shadow-xl bg-card">
           <CardHeader className="space-y-4 pb-6">
             <div className="flex justify-center pt-4">
               <img src="/ubva-logo.png" alt="UBVA Logo" className="h-16 object-contain" />

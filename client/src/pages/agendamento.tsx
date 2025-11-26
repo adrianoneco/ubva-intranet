@@ -4,11 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Trash2, Edit3, Search, SortAsc, SortDesc } from 'lucide-react';
+import { Trash2, Edit3, Search, SortAsc, SortDesc, Upload } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { getDate, getDateTime, getTime } from '@/utils/dateTime';
 
 type Pickup = {
   id: string;
@@ -18,7 +21,7 @@ type Pickup = {
   clientId: string;
   clientName: string;
   orderId: string;
-  userId?: string; // who created (username)
+  userId?: number; // who created (user id)
   userDisplayName?: string; // display name of creator
     createdAt: string;
     scheduledAt?: string; // ISO datetime for the scheduled slot (date+time)
@@ -26,18 +29,49 @@ type Pickup = {
 
 function storageKey() { return 'pickups.v1'; }
 
-function useStoredPickups() {
-  const [items, setItems] = React.useState<Pickup[]>(() => {
-    try { const raw = localStorage.getItem(storageKey()); return raw ? JSON.parse(raw) as Pickup[] : []; } catch (e) { return []; }
-  });
-  React.useEffect(() => {
-    try { localStorage.setItem(storageKey(), JSON.stringify(items)); } catch (e) {}
-  }, [items]);
-  return [items, setItems] as const;
-}
-
 export default function AgendamentoPage() {
-  const [pickups, setPickups] = useStoredPickups();
+  const qc = useQueryClient();
+  const pickupsQuery = useQuery({ queryKey: ['/api/pickups'] });
+  const pickups = (pickupsQuery.data ?? []) as Pickup[];
+  
+  const createPickupMutation = useMutation({
+    mutationFn: async (data: Pickup) => {
+      const res = await apiRequest('POST', '/api/pickups', data);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/pickups'] });
+    },
+  });
+
+  const updatePickupMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Pickup> }) => {
+      const res = await apiRequest('PATCH', `/api/pickups/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/pickups'] });
+    },
+  });
+
+  const deletePickupMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest('DELETE', `/api/pickups/${id}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/pickups'] });
+    },
+  });
+
+  const bulkCreateMutation = useMutation({
+    mutationFn: async (pickups: Pickup[]) => {
+      const res = await apiRequest('POST', '/api/pickups/bulk', { pickups });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/pickups'] });
+    },
+  });
   const [date, setDate] = React.useState(() => isoDateLocal(new Date()));
   const [time, setTime] = React.useState('');
   const [selectedDate, setSelectedDate] = React.useState<string>(() => isoDateLocal(new Date()));
@@ -225,9 +259,19 @@ export default function AgendamentoPage() {
         setModalOpen(false);
         return;
       }
-      const scheduledAt = `${useDate}T${time}:00`;
-      const updated = pickups.map(p => p.id === editingId ? ({ ...p, date: useDate, time, clientId: modalClientId, clientName: modalClientName, orderId: modalOrderTags.join(','), status: modalStatus, scheduledAt }) : p);
-      setPickups(updated);
+      const scheduledAt = new Date(`${useDate}T${time}:00`).toISOString();
+      await updatePickupMutation.mutateAsync({
+        id: editingId,
+        data: {
+          date: useDate,
+          time,
+          clientId: modalClientId,
+          clientName: modalClientName,
+          orderId: modalOrderTags.join(','),
+          status: modalStatus,
+          scheduledAt,
+        }
+      });
       toast({ title: 'Atualizado', description: 'Agendamento atualizado.' });
       setEditingId(null);
     } else {
@@ -244,12 +288,12 @@ export default function AgendamentoPage() {
         clientName: modalClientName,
         status: modalStatus || 'agendado',
         orderId: modalOrderTags.join(','),
-        userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+        userId: user ? (user as any).id : undefined,
         userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
         createdAt: new Date().toISOString(),
-        scheduledAt: `${useDate}T${time}:00`,
+        scheduledAt: new Date(`${useDate}T${time}:00`).toISOString(),
       };
-      setPickups([p, ...pickups]);
+      await createPickupMutation.mutateAsync(p);
       toast({ title: 'Agendado', description: 'Retirada agendada com sucesso.' });
     }
     setModalOpen(false);
@@ -283,7 +327,7 @@ export default function AgendamentoPage() {
     }
   }, [selectedDate, date, pickups, time, editingId]);
 
-  function handleCreate() {
+  async function handleCreate() {
     const useDate = selectedDate || date;
     if (!useDate || !clientId || !modalOrderTags.length || !time) {
       toast({ title: 'Validação', description: 'Preencha data, horário, clientId e pedido(s)' });
@@ -302,19 +346,47 @@ export default function AgendamentoPage() {
       clientName,
       status: 'agendado',
       orderId: modalOrderTags.join(','),
-      userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+      userId: user ? (user as any).id : undefined,
       userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
         createdAt: new Date().toISOString(),
-        scheduledAt: time ? `${useDate}T${time}:00` : undefined,
+        scheduledAt: time ? new Date(`${useDate}T${time}:00`).toISOString() : undefined,
     };
-    setPickups([p, ...pickups]);
+    await createPickupMutation.mutateAsync(p);
     toast({ title: 'Agendado', description: 'Retirada agendada com sucesso.' });
     resetForm();
   }
 
-  function handleDelete(id: string) {
-    setPickups(pickups.filter(p => p.id !== id));
+  async function handleDelete(id: string) {
+    await deletePickupMutation.mutateAsync(id);
     toast({ title: 'Removido', description: 'Agendamento removido.' });
+  }
+
+  // Sync localStorage to database
+  async function handleSyncLocalStorage() {
+    try {
+      const storageKey = 'pickups.v1';
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) {
+        toast({ title: 'Nenhum dado', description: 'Não há agendamentos no localStorage para sincronizar.' });
+        return;
+      }
+
+      const localPickups = JSON.parse(raw) as Pickup[];
+      if (localPickups.length === 0) {
+        toast({ title: 'Nenhum dado', description: 'Não há agendamentos no localStorage para sincronizar.' });
+        return;
+      }
+
+      await bulkCreateMutation.mutateAsync(localPickups);
+      localStorage.removeItem(storageKey);
+      toast({ 
+        title: 'Sincronizado', 
+        description: `${localPickups.length} agendamentos sincronizados e localStorage limpo.` 
+      });
+    } catch (e) {
+      console.error('Sync error:', e);
+      toast({ title: 'Erro', description: 'Falha ao sincronizar dados do localStorage.' });
+    }
   }
 
   // Helpers for range scheduling
@@ -350,7 +422,7 @@ export default function AgendamentoPage() {
     }
 
     const dates = iterateDatesInclusive(rangeStart, rangeEnd);
-    const results: { date: string; ok: boolean; reason?: string; id?: string }[] = [];
+    const results: { date: string; ok: boolean; reason?: string; id?: string; pickup?: Pickup }[] = [];
     const settings = loadScheduleSettings();
     const now = Date.now();
 
@@ -399,17 +471,21 @@ export default function AgendamentoPage() {
           clientName: modalClientName || clientName || 'Cliente',
           status: 'agendado',
           orderId: modalOrderTags.join(',') || modalOrderId || orderId || '',
-          userId: user ? ((user as any).username || String((user as any).id || '')) : 'anonymous',
+          userId: user ? (user as any).id : undefined,
           userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
           createdAt: new Date().toISOString(),
-          scheduledAt: `${d}T${chosen}:00`,
+          scheduledAt: new Date(`${d}T${chosen}:00`).toISOString(),
         };
-        // append
-        setPickups(prev => [p, ...prev]);
-        results.push({ date: d, ok: true, id: p.id });
+        results.push({ date: d, ok: true, id: p.id, pickup: p });
       } catch (e:any) {
         results.push({ date: d, ok: false, reason: e?.message || 'erro' });
       }
+    }
+
+    // Bulk create all successful pickups
+    const successfulPickups = results.filter(r => r.ok && r.pickup).map(r => r.pickup);
+    if (successfulPickups.length > 0) {
+      await bulkCreateMutation.mutateAsync(successfulPickups as Pickup[]);
     }
 
     const okCount = results.filter(r=>r.ok).length;
@@ -524,11 +600,11 @@ export default function AgendamentoPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-1">
+                  <div className="grid grid-cols-7 gap-1 text-center text-md text-muted-foreground mb-1">
                     {['Dom','Seg','Ter','Qua','Qui','Sex','Sab'].map(d => <div key={d}>{d}</div>)}
                   </div>
 
-                  <div className="grid grid-cols-7 gap-1 flex-1 overflow-auto">
+                  <div className="grid grid-cols-7 gap-2 flex-1 overflow-auto">
                     {monthMatrix.map(dt => {
                       const isCurrentMonth = dt.getMonth() === calendarMonth.getMonth();
                       const iso = isoDateLocal(dt);
@@ -569,13 +645,11 @@ export default function AgendamentoPage() {
                           type="button"
                           onClick={() => { if (!baseDisabled) { setSelectedDate(iso); setDate(iso); } }}
                           disabled={baseDisabled}
-                          className={`p-2 h-14 text-center rounded border shadow-sm ${selectedBg || monthBg} ${disabledCls} ${todayRing} hover:scale-100`}
+                          className={`p-1 h-12 text-center rounded border shadow-sm ${selectedBg || monthBg} ${disabledCls} ${todayRing} hover:scale-100`}
                         >
-                          <div className="flex flex-col items-center">
+                          <div className="flex flex-col items-center justify-center h-full">
                             <div className="text-sm font-medium">{dt.getDate()}</div>
-                            {count > 0 ? <div className="text-xs text-muted-foreground mt-1">{count}</div> : null}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-2">{isCurrentMonth ? '' : ' '}</div>
                         </button>
                       );
                     })}
@@ -590,97 +664,125 @@ export default function AgendamentoPage() {
                 const smallSlotsVisible = showCalendarOnMobile === null ? true : !showCalendarOnMobile;
                 return (
                   <div className={`${smallSlotsVisible ? '' : 'hidden lg:block'} col-span-2 h-full flex flex-col`}>
-                <div className="mb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium">Horários para {selectedDate ? parseIsoToLocal(selectedDate).toLocaleDateString('pt-BR') : (date ? parseIsoToLocal(date).toLocaleDateString('pt-BR') : '— selecione uma data —')}</div>
-                    <div className="text-sm text-muted-foreground">Clique em um horário para agendar</div>
-                  </div>
-                </div>
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">Horários para {selectedDate ? parseIsoToLocal(selectedDate).toLocaleDateString('pt-BR') : (date ? parseIsoToLocal(date).toLocaleDateString('pt-BR') : '— selecione uma data —')}</div>
+                        <div className="text-sm text-muted-foreground">Clique em um horário para agendar</div>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2 p-2 border rounded text-sm flex-1 overflow-auto">
-                  {generateTimeSlots().map(slot => {
-                    const useDate = selectedDate || date;
-                    const settings = loadScheduleSettings();
-                    const day = useDate ? new Date(useDate).getDay() : null;
-                    const isWithinAvailability = useDate ? withinAvailability(useDate) : true;
-                    // check if the date has any available slot (allow slot selection even on non-working day)
-                    let dateHasAvailable = false;
-                    try {
-                      if (useDate) {
-                        const now = Date.now();
-                        const slotsForDay = generateTimeSlots();
-                        for (const s of slotsForDay) {
-                          const [y, m, d] = (useDate||'').split('-').map(Number);
-                          const [hh, mm] = s.split(':').map(Number);
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-1.5 border rounded text-sm flex-1 overflow-y-auto p-2 content-start">
+                      {generateTimeSlots().filter(slot => {
+                        const useDate = selectedDate || date;
+                        if (!useDate) return false;
+                        
+                        let isPast = false;
+                        try {
+                          const [y, m, d] = (useDate || '').split('-').map(Number);
+                          const [hh, mm] = slot.split(':').map(Number);
                           const slotDt = new Date(y, (m||1) - 1, d, hh, mm, 0);
-                          const occupiedCheck = pickups.some(p => p.date === useDate && p.time === s);
-                          if (!occupiedCheck && slotDt.getTime() >= now) { dateHasAvailable = true; break; }
+                          const now = new Date();
+                          if (slotDt.getTime() < now.getTime()) isPast = true;
+                        } catch (e) { isPast = false; }
+                        
+                        return !isPast;
+                      }).map(slot => {
+                        const useDate = selectedDate || date;
+                        const settings = loadScheduleSettings();
+                        const day = useDate ? new Date(useDate).getDay() : null;
+                        const isWithinAvailability = useDate ? withinAvailability(useDate) : true;
+                        // check if the date has any available slot (allow slot selection even on non-working day)
+                        let dateHasAvailable = false;
+                        try {
+                          if (useDate) {
+                            const now = Date.now();
+                            const slotsForDay = generateTimeSlots();
+                            for (const s of slotsForDay) {
+                              const [y, m, d] = (useDate||'').split('-').map(Number);
+                              const [hh, mm] = s.split(':').map(Number);
+                              const slotDt = new Date(y, (m||1) - 1, d, hh, mm, 0);
+                              const occupiedCheck = pickups.some(p => p.date === useDate && p.time === s);
+                              if (!occupiedCheck && slotDt.getTime() >= now) { dateHasAvailable = true; break; }
+                            }
+                          }
+                        } catch (e) { dateHasAvailable = false; }
+
+                        const dayAllowed = day === null ? true : (((Array.isArray(settings.workingDays) ? settings.workingDays.includes(day) : true) || dateHasAvailable) && isWithinAvailability);
+                        const occupied = pickups.some(p => p.date === useDate && p.time === slot);
+                        const booking = pickups.find(p => p.date === useDate && p.time === slot);
+                        let isPast = false;
+                        if (useDate) {
+                          try {
+                            const [y, m, d] = (useDate || '').split('-').map(Number);
+                            const [hh, mm] = slot.split(':').map(Number);
+                            const slotDt = new Date(y, (m||1) - 1, d, hh, mm, 0);
+                            const now = new Date();
+                            if (slotDt.getTime() < now.getTime()) isPast = true;
+                          } catch (e) { isPast = false; }
                         }
-                      }
-                    } catch (e) { dateHasAvailable = false; }
+                        const disabled = !useDate || !dayAllowed || isPast;
 
-                    const dayAllowed = day === null ? true : (((Array.isArray(settings.workingDays) ? settings.workingDays.includes(day) : true) || dateHasAvailable) && isWithinAvailability);
-                    const occupied = pickups.some(p => p.date === useDate && p.time === slot);
-                    const booking = pickups.find(p => p.date === useDate && p.time === slot);
-                    let isPast = false;
-                    if (useDate) {
-                      try {
-                        const [y, m, d] = (useDate || '').split('-').map(Number);
-                        const [hh, mm] = slot.split(':').map(Number);
-                        const slotDt = new Date(y, (m||1) - 1, d, hh, mm, 0);
-                        const now = new Date();
-                        if (slotDt.getTime() < now.getTime()) isPast = true;
-                      } catch (e) { isPast = false; }
-                    }
-                    const disabled = !useDate || !dayAllowed || isPast;
+                        const statusColorText = (s?: string) => {
+                          switch (s) {
+                            case 'confirmado': return 'text-lime-600';
+                            case 'entregue': return 'text-emerald-600';
+                            case 'cancelado': return 'text-red-600';
+                            default: return 'text-purple-600';
+                          }
+                        };
 
-                    const statusColorText = (s?: string) => {
-                      switch (s) {
-                        case 'confirmado': return 'text-lime-600';
-                        case 'entregue': return 'text-emerald-600';
-                        case 'cancelado': return 'text-red-600';
-                        default: return 'text-purple-600';
-                      }
-                    };
+                        const statusBg = (s?: string) => {
+                          switch (s) {
+                            case 'confirmado': return 'bg-lime-600';
+                            case 'entregue': return 'bg-emerald-600';
+                            case 'cancelado': return 'bg-red-600';
+                            default: return 'bg-purple-600';
+                          }
+                        };
 
-                    const statusBg = (s?: string) => {
-                      switch (s) {
-                        case 'confirmado': return 'bg-lime-600';
-                        case 'entregue': return 'bg-emerald-600';
-                        case 'cancelado': return 'bg-red-600';
-                        default: return 'bg-purple-600';
-                      }
-                    };
+                        // determine if the date is within configured availability
+                        const slotBtn = (
+                          <button 
+                            key={slot} 
+                            type="button" 
+                            disabled={disabled || occupied} 
+                            onClick={() => booking ? openEdit(booking) : openModalFor(slot)} 
+                            className={`w-full h-14 text-sm rounded-lg border ${
+                              occupied
+                                ? `${statusBg(booking?.status)} text-white cursor-not-allowed border-transparent` 
+                                : 'bg-muted/10 dark:bg-white/5 hover:bg-muted/20 dark:hover:bg-white/10 border-border dark:border-white/10'
+                            }`}
+                          >
+                            <div className="flex flex-col items-center justify-center h-full py-1">
+                              <div className="font-medium leading-tight">{slot}</div>
+                              {occupied ? (
+                                <div className="text-xs leading-tight font-semibold">Agendado</div>
+                              ) : (
+                                isWithinAvailability && <div className="text-xs text-muted-foreground leading-tight">Disponível</div>
+                              )}
+                            </div>
+                          </button>
+                        );
 
-                    // determine if the date is within configured availability
-                    const slotBtn = (
-                      <button key={slot} type="button" disabled={disabled} onClick={() => booking ? openEdit(booking) : openModalFor(slot)} className={`min-w-[90px] text-sm py-2 px-3 rounded-lg border border-border dark:border-white/10 ${booking ? `${statusBg(booking.status)} text-white font-bold` : isPast ? 'bg-muted/30 dark:bg-muted/20 text-muted-foreground cursor-not-allowed' : 'bg-muted/10 dark:bg-white/5 hover:bg-muted/20 dark:hover:bg-white/10'}`}>
-                        <div className="flex flex-col items-center">
-                          <div className="font-medium">{slot}</div>
-                          {booking ? <div className={`text-xs text-white font-bold`}>Agendado</div> : isPast ? <div className="text-xs text-muted-foreground">Expirado</div> : (isWithinAvailability ? <div className="text-xs text-muted-foreground">Disponível</div> : null)}
-                        </div>
-                      </button>
-                    );
+                        if (booking) {
+                          return (
+                            <Tooltip key={slot}>
+                              <TooltipTrigger asChild>
+                                {slotBtn}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="text-sm font-medium">{booking.clientName} <span className="text-xs text-muted-foreground">(#{booking.clientId})</span></div>
+                                <div className="text-xs">Pedido: {booking.orderId}</div>
+                                <div className="text-xs">Status: {booking.status || 'agendado'}</div>
+                                <div className="text-xs text-muted-foreground">Criado por: {booking.userDisplayName || booking.userId || 'Desconhecido'}</div>
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        }
 
-                    if (booking) {
-                      return (
-                        <Tooltip key={slot}>
-                          <TooltipTrigger asChild>
-                            {slotBtn}
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <div className="text-sm font-medium">{booking.clientName} <span className="text-xs text-muted-foreground">(#{booking.clientId})</span></div>
-                            <div className="text-xs">Pedido: {booking.orderId}</div>
-                            <div className="text-xs">Status: {booking.status || 'agendado'}</div>
-                            <div className="text-xs text-muted-foreground">Criado por: {booking.userDisplayName || booking.userId || 'Desconhecido'}</div>
-                          </TooltipContent>
-                        </Tooltip>
-                      );
-                    }
-
-                    return slotBtn;
-                  })}
-                </div>
+                        return slotBtn;
+                      })}
+                    </div>
 
                 {/* Bookings list moved to separate card below */}
                   </div>
@@ -777,24 +879,31 @@ export default function AgendamentoPage() {
                           }
 
                           return (
-                            <div key={it.id} className={`group relative flex items-center justify-between bg-muted dark:bg-white/5 p-1 pl-4 rounded text-sm border border-transparent dark:border-white/5 ${bookingIsExpired ? 'opacity-60' : ''}`}>
+                            <div key={it.id} className={`group relative flex items-start justify-between bg-muted dark:bg-white/5 p-3 pl-6 pr-20 rounded text-sm border border-transparent dark:border-white/5 ${bookingIsExpired ? 'opacity-60' : ''}`}>
                               {/* left status indicator */}
                               {(() => {
                                 const s = it.status || 'agendado';
                                 const cls = s === 'confirmado' ? 'bg-lime-600' : s === 'entregue' ? 'bg-emerald-600' : s === 'cancelado' ? 'bg-red-600' : 'bg-purple-600';
-                                return <div className={`absolute left-2 top-2 bottom-2 w-1.5 rounded ${cls}`} />;
+                                return <div className={`absolute left-2 top-3 bottom-3 w-1.5 rounded ${cls}`} />;
                               })()}
 
-                              <div className="ml-4">
+                              <div className="flex-1 min-w-0 space-y-1">
                                 <div className="text-sm font-medium">{it.clientName} <span className="text-xs text-muted-foreground">(#{it.clientId})</span></div>
-                                <div className="text-xs">Pedido(s): { (it.orderId || '').split(',').map(s=>s.trim()).filter(Boolean).join(', ') } — Hora: {it.time || '-'}</div>
-                                <div className="text-xs text-muted-foreground">Criado por: {it.userDisplayName || it.userId || 'Desconhecido'} em {new Date(it.createdAt).toLocaleDateString('pt-BR')} às {new Date(it.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div className="text-xs">Pedido(s): { (it.orderId || '').split(',').map(s=>s.trim()).filter(Boolean).join(', ') }</div>
+                                <div className="text-xs text-muted-foreground">Criado por: {it.userDisplayName || it.userId || 'Desconhecido'} em {getDate(it.createdAt as any)} às {getTime(it.createdAt as any)}</div>
                               </div>
 
-                              {/* right status badge - hides on hover to reveal actions */}
-                              <div className="ml-2 flex items-center gap-2">
-                                <div className={`px-2 py-0.5 rounded text-white text-xs transition-opacity duration-150 ${it.status === 'confirmado' ? 'bg-lime-600' : it.status === 'entregue' ? 'bg-emerald-600' : it.status === 'cancelado' ? 'bg-red-600' : 'bg-purple-600'} opacity-100 group-hover:opacity-0`}>{it.status || 'agendado'}</div>
-                                <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                              {/* right side - time and actions */}
+                              <div className="flex flex-col items-end gap-2">
+                                {/* time display */}
+                                <div className="text-2xl font-bold text-foreground/80">
+                                  {it.time || '-'}
+                                </div>
+                                
+                                {/* status badge and actions */}
+                                <div className="flex items-center gap-2">
+                                  <div className={`px-2 py-1 rounded text-white text-xs whitespace-nowrap ${it.status === 'confirmado' ? 'bg-lime-600' : it.status === 'entregue' ? 'bg-emerald-600' : it.status === 'cancelado' ? 'bg-red-600' : 'bg-purple-600'}`}>{it.status || 'agendado'}</div>
+                                  <div className="flex items-center gap-1">
                                     <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label="Editar" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
                                       <Edit3 className="h-4 w-4" />
                                     </Button>
@@ -802,6 +911,7 @@ export default function AgendamentoPage() {
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </div>
+                                </div>
                               </div>
                             </div>
                           );
@@ -888,39 +998,49 @@ export default function AgendamentoPage() {
                               if (occupiedNow || slotDt.getTime() <= Date.now()) setTime('');
                             }
                           }}
+                          className="[color-scheme:dark]"
+                          style={{ colorScheme: 'dark' }}
                         />
                       </div>
                       <div>
                         <Label className="text-center">Horário</Label>
-                        <select
-                          value={time}
-                          onChange={(e:any)=>setTime(e.target.value)}
-                          className="mt-1 block w-48 rounded border p-2">
-                          <option value="">— selecione —</option>
-                          {generateTimeSlots().map(s => {
-                            const useDate = selectedDate || date;
-                            const occupied = useDate ? pickups.some(p => p.id !== editingId && p.date === useDate && p.time === s) : false;
-                            let isPast = false;
-                            if (useDate) {
-                              try {
-                                const [y, m, d] = (useDate||'').split('-').map(Number);
-                                const [hh, mm] = s.split(':').map(Number);
-                                const slotDt = new Date(y, (m||1)-1, d, hh, mm, 0);
-                                if (slotDt.getTime() < Date.now()) isPast = true;
-                              } catch (e) { isPast = false; }
-                            }
-                            return (<option key={s} value={s} disabled={occupied || isPast}>{s}{occupied ? ' — ocupado' : isPast ? ' — expirado' : ''}</option>);
-                          })}
-                        </select>
+                        <Select value={time} onValueChange={setTime}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="— selecione —" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {generateTimeSlots().filter(s => {
+                              const useDate = selectedDate || date;
+                              const occupied = useDate ? pickups.some(p => p.id !== editingId && p.date === useDate && p.time === s) : false;
+                              let isPast = false;
+                              if (useDate) {
+                                try {
+                                  const [y, m, d] = (useDate||'').split('-').map(Number);
+                                  const [hh, mm] = s.split(':').map(Number);
+                                  const slotDt = new Date(y, (m||1)-1, d, hh, mm, 0);
+                                  if (slotDt.getTime() < Date.now()) isPast = true;
+                                } catch (e) { isPast = false; }
+                              }
+                              return !occupied && !isPast;
+                            }).map(s => (
+                              <SelectItem key={s} value={s}>{s}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="col-span-2">
                         <Label className="text-center">Status</Label>
-                        <select value={modalStatus} onChange={(e:any)=>setModalStatus(e.target.value)} className="mt-1 block w-full rounded border p-2">
-                          <option value="agendado">Agendado</option>
-                          <option value="confirmado">Confirmado</option>
-                          <option value="entregue">Entregue</option>
-                          <option value="cancelado">Cancelado</option>
-                        </select>
+                        <Select value={modalStatus} onValueChange={(v: any) => setModalStatus(v)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="agendado">Agendado</SelectItem>
+                            <SelectItem value="confirmado">Confirmado</SelectItem>
+                            <SelectItem value="entregue">Entregue</SelectItem>
+                            <SelectItem value="cancelado">Cancelado</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   ) : null}
@@ -943,8 +1063,8 @@ export default function AgendamentoPage() {
                       </span>
                     ))}
                   </div>
-                  <input
-                    className="w-full rounded border p-2"
+                  <Input
+                    className="w-full"
                     placeholder="Digite o número do pedido e pressione Enter"
                     value={modalOrderInput}
                     onChange={(e:any)=>{

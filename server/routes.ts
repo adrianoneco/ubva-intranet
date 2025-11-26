@@ -6,11 +6,11 @@ import path from "path";
 import fs from "fs/promises";
 import multer from "multer";
 import { broadcast, registerSSE } from "./sse";
-import { insertTaskSchema, insertCategorySchema, insertCardSchema } from "@shared/schema";
+import { insertTaskSchema, insertCategorySchema, insertCardSchema, insertPickupSchema } from "@shared/schema";
 import { getCache, setCache, clearCachePattern } from "./redis";
 import { db } from "./db";
-import { users, groups, permissions, groupPermissions } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users, groups, permissions, groupPermissions, pickups } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 import crypto from 'crypto';
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -312,6 +312,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ now: now.getTime(), iso: now.toISOString() });
     } catch (e) {
       return res.status(500).json({ error: 'Failed to get server time' });
+    }
+  });
+
+  // Pickups (Agendamentos) endpoints
+  app.get('/api/pickups', async (_req, res) => {
+    try {
+      const allPickups = await db.select().from(pickups).orderBy(desc(pickups.scheduledAt));
+      return res.json(allPickups);
+    } catch (e) {
+      console.error('Failed to fetch pickups', e);
+      return res.status(500).json({ error: 'Failed to fetch pickups' });
+    }
+  });
+
+  app.post('/api/pickups', requireAuth, express.json(), async (req, res) => {
+    try {
+      const data = insertPickupSchema.parse(req.body);
+      const user = req.user as any;
+      const id = data.id || `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+      
+      const newPickup = {
+        id,
+        date: data.date,
+        time: data.time || null,
+        status: data.status || 'agendado',
+        clientId: data.clientId,
+        clientName: data.clientName || null,
+        orderId: data.orderId || null,
+        userId: user?.id || null,
+        userDisplayName: data.userDisplayName || user?.displayName || user?.username || null,
+        scheduledAt: data.scheduledAt || (data.date && data.time ? new Date(`${data.date}T${data.time}:00`) : null),
+      };
+
+      await db.insert(pickups).values(newPickup);
+      return res.status(201).json(newPickup);
+    } catch (e) {
+      console.error('Failed to create pickup', e);
+      return res.status(400).json({ error: 'Failed to create pickup' });
+    }
+  });
+
+  app.post('/api/pickups/bulk', requireAuth, express.json(), async (req, res) => {
+    try {
+      const items = req.body.pickups;
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'Expected array of pickups' });
+      }
+
+      const user = req.user as any;
+      const results = [];
+
+      for (const item of items) {
+        try {
+          const data = insertPickupSchema.parse(item);
+          const id = data.id || `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+          
+          const newPickup = {
+            id,
+            date: data.date,
+            time: data.time || null,
+            status: data.status || 'agendado',
+            clientId: data.clientId,
+            clientName: data.clientName || null,
+            orderId: data.orderId || null,
+            userId: user?.id || null,
+            userDisplayName: data.userDisplayName || user?.displayName || user?.username || null,
+            scheduledAt: data.scheduledAt || (data.date && data.time ? new Date(`${data.date}T${data.time}:00`) : null),
+          };
+
+          await db.insert(pickups).values(newPickup);
+          results.push({ id, success: true });
+        } catch (e) {
+          results.push({ id: item.id, success: false, error: String(e) });
+        }
+      }
+
+      return res.json({ results });
+    } catch (e) {
+      console.error('Failed to bulk create pickups', e);
+      return res.status(500).json({ error: 'Failed to bulk create pickups' });
+    }
+  });
+
+  app.patch('/api/pickups/:id', requireAuth, express.json(), async (req, res) => {
+    try {
+      const id = req.params.id;
+      const data = insertPickupSchema.partial().parse(req.body);
+      
+      const updateData: any = {};
+      if (data.date !== undefined) updateData.date = data.date;
+      if (data.time !== undefined) updateData.time = data.time;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.clientId !== undefined) updateData.clientId = data.clientId;
+      if (data.clientName !== undefined) updateData.clientName = data.clientName;
+      if (data.orderId !== undefined) updateData.orderId = data.orderId;
+      if (data.scheduledAt !== undefined) updateData.scheduledAt = data.scheduledAt;
+
+      await db.update(pickups).set(updateData).where(eq(pickups.id, id));
+      
+      const updated = await db.select().from(pickups).where(eq(pickups.id, id));
+      return res.json(updated[0]);
+    } catch (e) {
+      console.error('Failed to update pickup', e);
+      return res.status(400).json({ error: 'Failed to update pickup' });
+    }
+  });
+
+  app.delete('/api/pickups/:id', requireAuth, async (req, res) => {
+    try {
+      const id = req.params.id;
+      await db.delete(pickups).where(eq(pickups.id, id));
+      return res.status(204).send();
+    } catch (e) {
+      console.error('Failed to delete pickup', e);
+      return res.status(500).json({ error: 'Failed to delete pickup' });
     }
   });
 
