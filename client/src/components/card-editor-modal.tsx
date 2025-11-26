@@ -26,7 +26,7 @@ export type CardData = {
   id?: string;
   title: string;
   subtitle?: string;
-  image?: string;
+  image?: string | null;
   schedules?: ScheduleEntry[];
 };
 
@@ -282,7 +282,7 @@ export function CardEditorModal({ open, initial, onClose, onSave }: Props) {
       title,
       subtitle,
       // include image for new cards; for edits include only when changed
-      ...(!initial ? { image: image ? image : undefined } : (imageChanged ? { image: image ? image : null } : {})),
+      ...(!initial ? { image: image ? image : undefined } : (imageChanged ? { image: image ? image : undefined } : {})),
       schedules: finalSchedules,
     };
     onSave(data);

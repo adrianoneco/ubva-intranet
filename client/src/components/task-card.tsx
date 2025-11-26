@@ -10,7 +10,7 @@ interface TaskCardProps {
   task: Task;
   category?: Category;
   onToggle: (taskId: number, completed: boolean) => void;
-  onDelete: (taskId: number) => void;
+  onDelete?: (taskId: number) => void;
 }
 
 export function TaskCard({ task, category, onToggle, onDelete }: TaskCardProps) {
@@ -35,12 +35,12 @@ export function TaskCard({ task, category, onToggle, onDelete }: TaskCardProps) 
                 {task.title}
               </h3>
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onDelete(task.id)}
-                className="shrink-0"
-                data-testid={`button-delete-task-${task.id}`}
-              >
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDelete && onDelete(task.id)}
+                    className="shrink-0"
+                    data-testid={`button-delete-task-${task.id}`}
+                  >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>

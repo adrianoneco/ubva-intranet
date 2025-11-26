@@ -9,8 +9,8 @@ interface EditableCardProps {
   title: string;
   subtitle?: string;
   image?: string;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
   nextScheduleStart?: string | null;
   schedules?: any[];
   createdByMe?: boolean;
@@ -103,7 +103,7 @@ export function EditableCard({ id, title, subtitle, image, onEdit, onDelete, nex
 
   const muted = Boolean(createdByMe && isScheduledButInactive);
 
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   return (
     <Card className={`hover-elevate ${muted ? 'opacity-60' : ''}`}>
@@ -118,14 +118,18 @@ export function EditableCard({ id, title, subtitle, image, onEdit, onDelete, nex
                 ) : null}
               </div>
               <div className="flex items-center gap-2 ml-4">
-                {user ? (
+                {user && (hasPermission('cards:edit') || hasPermission('cards:delete')) ? (
                   <>
-                    <Button size="icon" variant="ghost" onClick={() => onEdit(id)} aria-label="Editar">
-                      <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => onDelete(id)} aria-label="Apagar">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {hasPermission('cards:edit') && onEdit && (
+                      <Button size="icon" variant="ghost" onClick={() => onEdit(id)} aria-label="Editar">
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {hasPermission('cards:delete') && onDelete && (
+                      <Button size="icon" variant="ghost" onClick={() => onDelete(id)} aria-label="Apagar">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </>
                 ) : null}
               </div>

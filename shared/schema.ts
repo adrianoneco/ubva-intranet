@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, primaryKey } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
@@ -71,15 +71,44 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 32 }).notNull().default('admin'),
   displayName: text("display_name"),
   email: text("email"),
-  permissions: text("permissions"), // store as JSON string array
+  // note: per-user permissions moved to normalized `permissions` registry and mappings
+  // `users.permissions` column removed by migration
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
 export const groups = pgTable("groups", {
   id: varchar("id", { length: 64 }).primaryKey(),
   name: text("name").notNull().unique(),
-  permissions: text("permissions"), // JSON string array
+  permissions: text("permissions"), // JSON string array (legacy) — migrated permissions are in `permissions` + `group_permissions`
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const permissions = pgTable("permissions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  key: text("key").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const groupPermissions = pgTable("group_permissions", {
+  groupId: varchar("group_id", { length: 64 }).notNull(),
+  permissionId: integer("permission_id").notNull(),
+}, (t) => ({
+  pk: primaryKey(t.groupId, t.permissionId),
+}));
+
+export const pickups = pgTable("pickups", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  date: varchar("date", { length: 10 }).notNull(),
+  time: varchar("time", { length: 5 }),
+  status: varchar("status", { length: 20 }).default('agendado'),
+  clientId: varchar("client_id", { length: 255 }).notNull(),
+  clientName: text("client_name"),
+  orderId: text("order_id"),
+  userId: integer("user_id").references(() => users.id, { onDelete: 'set null' }),
+  userDisplayName: text("user_display_name"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  scheduledAt: timestamp("scheduled_at"),
 });
 
 export const tasksRelations = relations(tasks, ({ one }) => ({
@@ -114,6 +143,19 @@ export const insertCardSchema = z.object({
   scheduleWeekdays: z.string().optional(),
 });
 
+export const insertPickupSchema = z.object({
+  id: z.string().optional(),
+  date: z.string(),
+  time: z.string().optional(),
+  status: z.enum(['agendado', 'confirmado', 'entregue', 'cancelado']).optional(),
+  clientId: z.string(),
+  clientName: z.string().optional(),
+  orderId: z.string().optional(),
+  userId: z.number().optional(),
+  userDisplayName: z.string().optional(),
+  scheduledAt: z.string().optional().transform((s) => (s ? new Date(s) : undefined)),
+});
+
 export type Category = typeof categories.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Task = typeof tasks.$inferSelect;
@@ -122,3 +164,5 @@ export type Card = typeof cards.$inferSelect;
 export type InsertCard = z.infer<typeof insertCardSchema>;
 export type Contact = typeof contacts.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type Pickup = typeof pickups.$inferSelect;
+export type InsertPickup = z.infer<typeof insertPickupSchema>;

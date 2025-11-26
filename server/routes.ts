@@ -6,11 +6,11 @@ import path from "path";
 import fs from "fs/promises";
 import multer from "multer";
 import { broadcast, registerSSE } from "./sse";
-import { insertTaskSchema, insertCategorySchema, insertCardSchema } from "@shared/schema";
+import { insertTaskSchema, insertCategorySchema, insertCardSchema, insertPickupSchema } from "@shared/schema";
 import { getCache, setCache, clearCachePattern } from "./redis";
 import { db } from "./db";
-import { users, groups } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users, groups, permissions, groupPermissions, pickups } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 import crypto from 'crypto';
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -129,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const csv = (req.body && req.body.csv) || '';
       if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'Missing csv body' });
 
-      function splitSemicolonRow(line: string) {
+      const splitSemicolonRow = (line: string) => {
         const res: string[] = [];
         let cur = '';
         let inQuotes = false;
@@ -141,12 +141,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         res.push(cur);
         return res.map(s => s.trim());
-      }
+      };
 
-      function isEmail(v: string) {
+      const isEmail = (v: string) => {
         if (!v) return false;
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-      }
+      };
 
       const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (lines.length === 0) return res.json({ headersDetected: false, rows: [], summary: { valid: 0, invalid: 0 } });
@@ -315,6 +315,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pickups (Agendamentos) endpoints
+  app.get('/api/pickups', async (_req, res) => {
+    try {
+      const allPickups = await db.select().from(pickups).orderBy(desc(pickups.scheduledAt));
+      return res.json(allPickups);
+    } catch (e) {
+      console.error('Failed to fetch pickups', e);
+      return res.status(500).json({ error: 'Failed to fetch pickups' });
+    }
+  });
+
+  app.post('/api/pickups', requireAuth, express.json(), async (req, res) => {
+    try {
+      const data = insertPickupSchema.parse(req.body);
+      const user = req.user as any;
+      const id = data.id || `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+      
+      const newPickup = {
+        id,
+        date: data.date,
+        time: data.time || null,
+        status: data.status || 'agendado',
+        clientId: data.clientId,
+        clientName: data.clientName || null,
+        orderId: data.orderId || null,
+        userId: user?.id || null,
+        userDisplayName: data.userDisplayName || user?.displayName || user?.username || null,
+        scheduledAt: data.scheduledAt || (data.date && data.time ? new Date(`${data.date}T${data.time}:00`) : null),
+      };
+
+      await db.insert(pickups).values(newPickup);
+      return res.status(201).json(newPickup);
+    } catch (e) {
+      console.error('Failed to create pickup', e);
+      return res.status(400).json({ error: 'Failed to create pickup' });
+    }
+  });
+
+  app.post('/api/pickups/bulk', requireAuth, express.json(), async (req, res) => {
+    try {
+      const items = req.body.pickups;
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'Expected array of pickups' });
+      }
+
+      const user = req.user as any;
+      const results = [];
+
+      for (const item of items) {
+        try {
+          const data = insertPickupSchema.parse(item);
+          const id = data.id || `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+          
+          const newPickup = {
+            id,
+            date: data.date,
+            time: data.time || null,
+            status: data.status || 'agendado',
+            clientId: data.clientId,
+            clientName: data.clientName || null,
+            orderId: data.orderId || null,
+            userId: user?.id || null,
+            userDisplayName: data.userDisplayName || user?.displayName || user?.username || null,
+            scheduledAt: data.scheduledAt || (data.date && data.time ? new Date(`${data.date}T${data.time}:00`) : null),
+          };
+
+          await db.insert(pickups).values(newPickup);
+          results.push({ id, success: true });
+        } catch (e) {
+          results.push({ id: item.id, success: false, error: String(e) });
+        }
+      }
+
+      return res.json({ results });
+    } catch (e) {
+      console.error('Failed to bulk create pickups', e);
+      return res.status(500).json({ error: 'Failed to bulk create pickups' });
+    }
+  });
+
+  app.patch('/api/pickups/:id', requireAuth, express.json(), async (req, res) => {
+    try {
+      const id = req.params.id;
+      const data = insertPickupSchema.partial().parse(req.body);
+      
+      const updateData: any = {};
+      if (data.date !== undefined) updateData.date = data.date;
+      if (data.time !== undefined) updateData.time = data.time;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.clientId !== undefined) updateData.clientId = data.clientId;
+      if (data.clientName !== undefined) updateData.clientName = data.clientName;
+      if (data.orderId !== undefined) updateData.orderId = data.orderId;
+      if (data.scheduledAt !== undefined) updateData.scheduledAt = data.scheduledAt;
+
+      await db.update(pickups).set(updateData).where(eq(pickups.id, id));
+      
+      const updated = await db.select().from(pickups).where(eq(pickups.id, id));
+      return res.json(updated[0]);
+    } catch (e) {
+      console.error('Failed to update pickup', e);
+      return res.status(400).json({ error: 'Failed to update pickup' });
+    }
+  });
+
+  app.delete('/api/pickups/:id', requireAuth, async (req, res) => {
+    try {
+      const id = req.params.id;
+      await db.delete(pickups).where(eq(pickups.id, id));
+      return res.status(204).send();
+    } catch (e) {
+      console.error('Failed to delete pickup', e);
+      return res.status(500).json({ error: 'Failed to delete pickup' });
+    }
+  });
+
   // Simple auth endpoints (login/logout) using passport-local + session
   app.post('/api/login', express.json(), (req, res, next) => {
     // passport authenticate with callback to control response
@@ -324,8 +439,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) return res.status(401).json({ error: 'Invalid credentials' });
       req.logIn(user, (err2: any) => {
         if (err2) return next(err2);
-        // return minimal user info
-        return res.json({ ok: true, user: { username: user.username } });
+        // return full user info with permissions
+        return res.json({ ok: true, user: { 
+          username: user.username, 
+          displayName: user.displayName,
+          email: user.email,
+          role: user.role,
+          permissions: user.permissions || []
+        } });
       });
     });
     return passportAuth(req, res, next);
@@ -387,7 +508,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/users', requireAuth, async (_req, res) => {
     try {
       const rows: any[] = await db.select().from(users);
-      const out = rows.map(r => ({ id: r.id, username: r.username, displayName: r.displayName || r.display_name || null, email: r.email || null, role: r.role, permissions: r.permissions ? JSON.parse(r.permissions) : [] }));
+      const out: any[] = [];
+      for (const r of rows) {
+        let perms: string[] = [];
+        try {
+          if (r.role) {
+            if (r.role === 'admin') {
+              const all = await db.select().from(permissions).orderBy(permissions.id);
+              perms = Array.isArray(all) ? all.map((p: any) => p.key) : [];
+            } else {
+              const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, r.role));
+              perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+            }
+          }
+        } catch (e) { perms = []; }
+        out.push({ id: r.id, username: r.username, displayName: r.displayName || r.display_name || null, email: r.email || null, role: r.role, permissions: perms });
+      }
       return res.json(out);
     } catch (e) {
       console.error('Failed to fetch users', e);
@@ -402,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const displayName = String(body.displayName || body.display_name || '').trim();
       const email = body.email ? String(body.email).trim() : null;
       const role = String(body.role || 'viewer');
-      const permissions = Array.isArray(body.permissions) ? body.permissions : [];
+      // Users are linked to groups (role). Ignore per-user permissions; keep empty.
 
       // generate a username from email or displayName
       let base = email ? email.split('@')[0] : (displayName ? displayName.toLowerCase().replace(/[^a-z0-9]+/g,'-') : `user${Date.now()}`);
@@ -422,11 +558,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const iterations = 100000;
       const passwordHash = crypto.pbkdf2Sync(pw, salt, iterations, 64, 'sha512').toString('hex');
 
-      const insertRes = await db.insert(users).values({ username, passwordHash, salt, iterations, role, displayName, email, permissions: JSON.stringify(permissions) } as any);
+      const insertRes = await db.insert(users).values({ username, passwordHash, salt, iterations, role, displayName, email } as any);
       // fetch created
       const [created] = await db.select().from(users).where(eq(users.username, username));
       // If the server generated the password (not provided), return it so admin can copy it; otherwise don't return password in response
-      const resp: any = { ok: true, user: { id: created.id, username: created.username, displayName: created.displayName, email: created.email, role: created.role, permissions: created.permissions ? JSON.parse(created.permissions) : [] } };
+      // derive permissions from the user's role/group
+      let derivedPermissions: string[] = [];
+      try {
+        if (created.role) {
+          if (created.role === 'admin') {
+            const permsRows: any[] = await db.select({ key: permissions.key }).from(permissions).orderBy(permissions.id);
+            derivedPermissions = Array.isArray(permsRows) ? permsRows.map((p: any) => p.key) : [];
+          } else {
+            const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, created.role));
+            derivedPermissions = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+          }
+        }
+      } catch (e) { derivedPermissions = []; }
+      const resp: any = { ok: true, user: { id: created.id, username: created.username, displayName: created.displayName, email: created.email, role: created.role, permissions: derivedPermissions } };
       if (!providedPassword) resp.password = pw;
       return res.status(201).json(resp);
     } catch (e) {
@@ -445,10 +594,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.displayName !== undefined) patch.displayName = body.displayName;
       if (body.email !== undefined) patch.email = body.email;
       if (body.role !== undefined) patch.role = body.role;
-      if (body.permissions !== undefined) patch.permissions = JSON.stringify(Array.isArray(body.permissions) ? body.permissions : []);
+      // Do not allow setting per-user permissions here. Permissions are derived from groups (role).
       // allow password change
       if (body.password !== undefined) {
-        const newPw = String(body.password || '');
+        const newPw = String(body.password || '').trim();
         if (newPw && newPw.length > 0) {
           const newSalt = crypto.randomBytes(16).toString('hex');
           const iterations = 100000;
@@ -456,14 +605,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           patch.passwordHash = newHash;
           patch.salt = newSalt;
           patch.iterations = iterations;
+          console.log(`[USER UPDATE] Updating password for user ID ${id}`);
         } else {
           // if empty string provided, ignore (do not clear password)
         }
       }
       if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+      console.log(`[USER UPDATE] Patch object:`, Object.keys(patch));
       await db.update(users).set(patch).where(eq(users.id, id));
       const [row] = await db.select().from(users).where(eq(users.id, id));
-      return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.display_name, email: row.email, role: row.role, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      console.log(`[USER UPDATE] Updated user ${row.username}, has passwordHash: ${!!row.passwordHash}`);
+      // derive permissions from role/group using normalized mappings
+      let updatedPerms: string[] = [];
+      try {
+        if (row.role) {
+          if (row.role === 'admin') {
+            const permsRows: any[] = await db.select({ key: permissions.key }).from(permissions).orderBy(permissions.id);
+            updatedPerms = Array.isArray(permsRows) ? permsRows.map((p: any) => p.key) : [];
+          } else {
+            const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, row.role));
+            updatedPerms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+          }
+        }
+      } catch (e) { updatedPerms = []; }
+      return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.displayName, email: row.email, role: row.role, permissions: updatedPerms } });
     } catch (e) {
       console.error('Failed to update user', e);
       return res.status(500).json({ error: 'Failed to update user' });
@@ -487,7 +652,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/groups', requireAuth, async (_req, res) => {
     try {
       const rows: any[] = await db.select().from(groups);
-      const out = rows.map(r => ({ id: r.id, name: r.name, permissions: r.permissions ? JSON.parse(r.permissions) : [] }));
+      const out: any[] = [];
+      for (const g of rows) {
+        try {
+          const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, g.id));
+          const perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+          out.push({ id: g.id, name: g.name, permissions: perms });
+        } catch (e) {
+          out.push({ id: g.id, name: g.name, permissions: [] });
+        }
+      }
       return res.json(out);
     } catch (e) {
       console.error('Failed to fetch groups', e);
@@ -501,10 +675,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const name = String(body.name || '').trim();
       if (!name) return res.status(400).json({ error: 'Missing name' });
       const id = (body.id || name.toLowerCase().replace(/[^a-z0-9]+/g,'-'));
-      const permissions = Array.isArray(body.permissions) ? body.permissions : [];
-      await db.insert(groups).values({ id, name, permissions: JSON.stringify(permissions) } as any);
+      const permissionsBody = Array.isArray(body.permissions) ? body.permissions : [];
+      await db.insert(groups).values({ id, name } as any);
+      // ensure permission keys exist and create mappings
+      for (const key of permissionsBody) {
+        // insert permission if not exists
+        await db.insert(permissions).values({ key }).onConflictDoNothing();
+        // fetch permission id
+        const [p] = await db.select().from(permissions).where(eq(permissions.key, key));
+        if (p) {
+          await db.insert(groupPermissions).values({ groupId: id, permissionId: p.id }).onConflictDoNothing();
+        }
+      }
       const [row] = await db.select().from(groups).where(eq(groups.id, id));
-      return res.status(201).json({ ok: true, group: { id: row.id, name: row.name, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      // return created group with derived permissions
+      const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, id));
+      const perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+      return res.status(201).json({ ok: true, group: { id: row.id, name: row.name, permissions: perms } });
     } catch (e) {
       console.error('Failed to create group', e);
       return res.status(500).json({ error: 'Failed to create group' });
@@ -518,11 +705,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body || {};
       const patch: any = {};
       if (body.name !== undefined) patch.name = body.name;
-      if (body.permissions !== undefined) patch.permissions = JSON.stringify(Array.isArray(body.permissions) ? body.permissions : []);
-      if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nothing to update' });
-      await db.update(groups).set(patch).where(eq(groups.id, id));
+      if (Object.keys(patch).length === 0 && body.permissions === undefined) return res.status(400).json({ error: 'Nothing to update' });
+      if (Object.keys(patch).length > 0) await db.update(groups).set(patch).where(eq(groups.id, id));
+
+      if (body.permissions !== undefined) {
+        const newPerms: string[] = Array.isArray(body.permissions) ? body.permissions : [];
+        // replace mappings: delete existing and insert new
+        await db.delete(groupPermissions).where(eq(groupPermissions.groupId, id));
+        for (const key of newPerms) {
+          await db.insert(permissions).values({ key }).onConflictDoNothing();
+          const [p] = await db.select().from(permissions).where(eq(permissions.key, key));
+          if (p) await db.insert(groupPermissions).values({ groupId: id, permissionId: p.id }).onConflictDoNothing();
+        }
+      }
+
       const [row] = await db.select().from(groups).where(eq(groups.id, id));
-      return res.json({ ok: true, group: { id: row.id, name: row.name, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, id));
+      const perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+      return res.json({ ok: true, group: { id: row.id, name: row.name, permissions: perms } });
     } catch (e) {
       console.error('Failed to update group', e);
       return res.status(500).json({ error: 'Failed to update group' });
@@ -534,8 +734,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = String(req.params.id || '');
       if (!id) return res.status(400).json({ error: 'Missing id' });
       await db.delete(groups).where(eq(groups.id, id));
-      // reset users with this role to viewer
-      await db.update(users).set({ role: 'viewer', permissions: JSON.stringify([]) } as any).where(eq(users.role, id));
+      // reset users with this role to viewer (clear role only)
+      await db.update(users).set({ role: 'viewer' } as any).where(eq(users.role, id));
       return res.json({ ok: true });
     } catch (e) {
       console.error('Failed to delete group', e);
@@ -594,6 +794,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // middleware to require a specific permission
+  function requirePermission(permission: string) {
+    return async (req: any, res: any, next: any) => {
+      try {
+        // If the user is in the admin role, grant all permissions immediately
+        try {
+          if (req.user && req.user.role === 'admin') return next();
+        } catch (e) {}
+
+        // try permissions on req.user first
+        let perms: string[] | undefined = undefined;
+        if (req.user && Array.isArray(req.user.permissions)) perms = req.user.permissions;
+
+          // if not present, derive permissions from the user's group/role using normalized tables
+          if ((!perms || perms.length === 0) && req.user) {
+            try {
+              // try to resolve role from session user object or DB (prefer session)
+              let role: string | undefined = undefined;
+              if (req.user.role) role = req.user.role;
+              else if (req.user.id) {
+                const [uRow] = await db.select({ role: users.role }).from(users).where(eq(users.id, req.user.id));
+                if (uRow) role = uRow.role;
+              } else if (req.user.username) {
+                const [uRow] = await db.select({ role: users.role }).from(users).where(eq(users.username, req.user.username));
+                if (uRow) role = uRow.role;
+              }
+
+              if (role) {
+                if (role === 'admin') {
+                  const permsRows: any[] = await db.select({ key: permissions.key }).from(permissions).orderBy(permissions.id);
+                  perms = permsRows.map((p: any) => p.key);
+                } else {
+                  const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, role));
+                  perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+                }
+              }
+            } catch (e) {
+              // ignore DB error and fall through to forbidden
+            }
+          }
+
+        if (Array.isArray(perms) && perms.includes(permission)) return next();
+        return res.status(403).json({ error: 'Forbidden' });
+      } catch (e) {
+        return res.status(500).json({ error: 'Permission check failed' });
+      }
+    };
   }
 
   // Protect certain client-side pages (SPA routes) by requiring login.
@@ -671,7 +920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Card image upload and attach to card (for editing existing cards)
-  app.post('/api/cards/:id/upload-image', requireAuth, (upload.single('file') as any), async (req, res) => {
+  app.post('/api/cards/:id/upload-image', requireAuth, requirePermission('cards:edit'), (upload.single('file') as any), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid card id' });
@@ -699,7 +948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Schedule image upload (does not modify card) - used for images attached to schedule entries
-  app.post('/api/cards/schedule-upload', requireAuth, (upload.single('file') as any), async (req, res) => {
+  app.post('/api/cards/schedule-upload', requireAuth, requirePermission('cards:edit'), (upload.single('file') as any), async (req, res) => {
     try {
       const file = req.file as Express.Multer.File | undefined;
       if (!file) return res.status(400).json({ error: 'No file provided' });
@@ -884,7 +1133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/cards", requireAuth, async (req, res) => {
+  app.post("/api/cards", requireAuth, requirePermission('cards:create'), async (req, res) => {
     try {
       const result = insertCardSchema.safeParse(req.body);
       if (!result.success) {
@@ -902,7 +1151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Separate schedule-only update endpoint: updates only scheduleWeekdays
-  app.patch("/api/cards/:id/schedules", requireAuth, async (req, res) => {
+  app.patch("/api/cards/:id/schedules", requireAuth, requirePermission('cards:edit'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const schedules = req.body.schedules ?? req.body.scheduleWeekdays;
@@ -956,7 +1205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/cards/:id", requireAuth, async (req, res) => {
+  app.patch("/api/cards/:id", requireAuth, requirePermission('cards:edit'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updateSchema = insertCardSchema.partial();
@@ -1007,7 +1256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/cards/:id", requireAuth, async (req, res) => {
+  app.delete("/api/cards/:id", requireAuth, requirePermission('cards:delete'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteCard(id);

@@ -1,0 +1,3 @@
+A imagem precisa ser copiada manualmente ou via upload.
+Por favor, salve a imagem "UBVA - Tradição que Transcende" no arquivo:
+/srv/intranet-ubva/client/public/ubva-logo.png

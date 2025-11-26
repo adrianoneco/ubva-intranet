@@ -9,13 +9,16 @@ import AgendamentoPage from "@/pages/agendamento";
 import SettingsPage from "@/pages/settings";
 import { apiRequest } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { EditableCard } from "@/components/editable-card";
 import CardEditorModal, { CardData } from "@/components/card-editor-modal";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import type { Card as CardType } from "@shared/schema";
+import { Globe, LogOut } from "lucide-react";
 
 function App() {
   const style = {
@@ -155,11 +158,31 @@ function App() {
   // client-side guard: redirect to /login when unauthenticated users access protected SPA routes
   React.useEffect(() => {
     try {
-      if (!user && (location.startsWith('/agendamento') || location.startsWith('/settings') || location.startsWith('/calendario'))) {
-        setLocation('/login');
+      // Skip if already on login page or loading
+      if (location.startsWith('/login') || auth.loading) {
+        return;
+      }
+      
+      // Dashboard (/app) and contacts are public, no authentication required
+      if (!user) {
+        // Only redirect to login for protected routes (agendamento, settings)
+        if (location.startsWith('/agendamento') || location.startsWith('/settings') || location.startsWith('/calendario')) {
+          setLocation(`/login?redirect=${encodeURIComponent(location)}`);
+        }
+        return;
+      }
+      
+      // Check permissions for each route (only for authenticated users)
+      if (location.startsWith('/agendamento') && !auth.hasPermission('calendar:view')) {
+        setLocation('/app');
+        return;
+      }
+      if ((location.startsWith('/settings') || location.startsWith('/calendario')) && !auth.hasPermission('settings:view')) {
+        setLocation('/app');
+        return;
       }
     } catch (e) {}
-  }, [location, user, setLocation]);
+  }, [location, user, setLocation, auth, auth.loading]);
 
   function handleEdit(id: string) {
     const card = cards.find((c) => String(c.id) === id);
@@ -222,18 +245,28 @@ function App() {
   // route selection
   let content: React.ReactNode = null;
   if (location.startsWith('/contacts')) {
+    // Contacts page is public, no authentication required
     content = <ContactsPage />;
-    } else if (location.startsWith('/agendamento')) {
-    content = <AgendamentoPage />;
-    } else if (location.startsWith('/settings') || location.startsWith('/calendario')) {
-    content = <SettingsPage />;
-    } else if (location.startsWith('/login')) {
+  } else if (location.startsWith('/agendamento')) {
+    if (!user || !auth.hasPermission('calendar:view')) {
+      content = <div className="p-8 text-center"><p className="text-muted-foreground">Você não tem permissão para acessar esta página</p></div>;
+    } else {
+      content = <AgendamentoPage />;
+    }
+  } else if (location.startsWith('/settings') || location.startsWith('/calendario')) {
+    if (!user || !auth.hasPermission('settings:view')) {
+      content = <div className="p-8 text-center"><p className="text-muted-foreground">Você não tem permissão para acessar esta página</p></div>;
+    } else {
+      content = <SettingsPage />;
+    }
+  } else if (location.startsWith('/login')) {
     content = (
       <React.Suspense fallback={<div>Loading...</div>}>
         <LoginPage />
       </React.Suspense>
     );
   } else {
+    // Dashboard (/app) is public, no authentication required
     content = (
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-4">
@@ -279,14 +312,25 @@ function App() {
                   nextScheduleStart={nextStart}
                   schedules={schedules}
                   createdByMe={myCreatedIds.includes(String(c.id))}
-                  onEdit={user ? handleEdit : undefined}
-                  onDelete={user ? handleDelete : undefined}
+                  {...(user ? { onEdit: handleEdit, onDelete: handleDelete } : {})}
                 />
               );
             })}
           </div>
         )}
       </div>
+    );
+  }
+
+  // Login page doesn't need sidebar/header
+  if (location.startsWith('/login')) {
+    return (
+      <>
+        <TooltipProvider>
+          {content}
+          <Toaster />
+        </TooltipProvider>
+      </>
     );
   }
 
@@ -298,20 +342,39 @@ function App() {
           <AppSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
             <header className="flex items-center justify-between p-4 border-b bg-background">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
+                <div className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-primary" />
+                  <span className="font-semibold text-lg">INTRANET</span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                   <ThemeToggle />
                   {user ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">{user.username}</span>
-                      <button className="btn btn-ghost" onClick={async () => {
-                        try {
-                          await auth.logout();
-                        } catch (e) {}
-                        setLocation('/');
-                      }}>Sair</button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((user as any).displayName || user.username)}`} alt={(user as any).displayName || user.username} />
+                          <AvatarFallback />
+                        </Avatar>
+                        <span className="text-sm font-medium">{(user as any).displayName || user.username}</span>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={async () => {
+                            try {
+                              await auth.logout();
+                            } catch (e) {}
+                            setLocation('/');
+                          }}>
+                            <LogOut className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Sair</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   ) : (
                     <React.Suspense fallback={null}>

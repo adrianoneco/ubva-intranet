@@ -4,7 +4,7 @@ import MemoryStore from "memorystore";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from './db';
-import { users } from '@shared/schema';
+import { users, groups, permissions as permTable, groupPermissions as gpTable } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { registerRoutes } from "./routes";
@@ -59,11 +59,33 @@ passport.use(new LocalStrategy((username, password, done) => {
       try {
         const iterations = user.iterations || 100000;
         const hash = crypto.pbkdf2Sync(password, user.salt, iterations, 64, 'sha512').toString('hex');
-        if (hash === user.passwordHash) {
-          return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null });
+        console.log(`[LOGIN] User: ${user.username}, Email: ${user.email}, Hash match: ${hash === user.passwordHash || hash === user.password_hash}`);
+        // Check both camelCase and snake_case field names for compatibility
+        const storedHash = user.passwordHash || user.password_hash;
+        if (hash === storedHash) {
+          // Resolve permissions from user's explicit permissions or their group
+          let permissions: string[] = [];
+          try {
+            // derive permissions from normalized permissions tables
+            if (user.role) {
+              if (user.role === 'admin') {
+                // admin: return all known permissions
+                const permsRows = await db.select().from(permTable).orderBy(permTable.id);
+                permissions = permsRows.map((p: any) => p.key);
+              } else {
+                // lookup via group_permissions join
+                const rows = await db.select({ key: permTable.key }).from(permTable).innerJoin(gpTable, eq(gpTable.permissionId, permTable.id)).where(eq(gpTable.groupId, user.role));
+                permissions = Array.isArray(rows) ? rows.map((r: any) => r.key) : [];
+              }
+            }
+          } catch (e) {
+            permissions = [];
+          }
+          return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
         }
         return done(null, false, { message: 'Invalid credentials' });
       } catch (e) {
+        console.error('[LOGIN] Error during password verification:', e);
         return done(e as any);
       }
     }).catch((err: any) => done(err));
@@ -71,10 +93,28 @@ passport.use(new LocalStrategy((username, password, done) => {
 
 passport.serializeUser((user: any, done) => done(null, user.id));
 passport.deserializeUser((id: any, done) => {
-  db.select().from(users).where(eq(users.id, id)).then((rows: any[]) => {
+  db.select().from(users).where(eq(users.id, id)).then(async (rows: any[]) => {
     const user = rows[0];
     if (!user) return done(null, false);
-    return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null });
+    try {
+      let permissions: string[] = [];
+      try {
+        if (user.role) {
+          if (user.role === 'admin') {
+            const permsRows = await db.select().from(permTable).orderBy(permTable.id);
+            permissions = permsRows.map((p: any) => p.key);
+          } else {
+            const rows = await db.select({ key: permTable.key }).from(permTable).innerJoin(gpTable, eq(gpTable.permissionId, permTable.id)).where(eq(gpTable.groupId, user.role));
+            permissions = Array.isArray(rows) ? rows.map((r: any) => r.key) : [];
+          }
+        }
+      } catch (e) {
+        permissions = [];
+      }
+      return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
+    } catch (e) {
+      return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions: [] });
+    }
   }).catch((err: any) => done(err));
 });
 
