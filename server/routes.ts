@@ -324,8 +324,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) return res.status(401).json({ error: 'Invalid credentials' });
       req.logIn(user, (err2: any) => {
         if (err2) return next(err2);
-        // return minimal user info
-        return res.json({ ok: true, user: { username: user.username } });
+        // return full user info with permissions
+        return res.json({ ok: true, user: { 
+          username: user.username, 
+          displayName: user.displayName,
+          email: user.email,
+          role: user.role,
+          permissions: user.permissions || []
+        } });
       });
     });
     return passportAuth(req, res, next);

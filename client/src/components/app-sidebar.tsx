@@ -43,7 +43,8 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { user, loading, hasPermission } = useAuth();
+  const auth = useAuth();
+  const { user, loading } = auth;
 
   const visibleMenuItems = React.useMemo(() => {
     if (loading) return [];
@@ -51,8 +52,8 @@ export function AppSidebar() {
     if (!user) {
       return menuItems.filter(item => item.permission === 'dashboard:view' || item.permission === 'contacts:view');
     }
-    return menuItems.filter(item => hasPermission(item.permission));
-  }, [user, loading, hasPermission]);
+    return menuItems.filter(item => auth.hasPermission(item.permission));
+  }, [user, loading, auth]);
 
   return (
     <Sidebar>
