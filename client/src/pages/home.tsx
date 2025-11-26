@@ -151,11 +151,19 @@ export default function Home() {
   });
 
   function handleCreateCard() {
+    if (!hasPermission('cards:create')) {
+      toast({ title: "Permissão negada", description: "Você não tem permissão para criar cards.", variant: "destructive" });
+      return;
+    }
     setEditingCard(undefined);
     setEditorOpen(true);
   }
 
   function handleEditCard(id: string) {
+    if (!hasPermission('cards:edit')) {
+      toast({ title: "Permissão negada", description: "Você não tem permissão para editar cards.", variant: "destructive" });
+      return;
+    }
     const card = cards.find((c) => String(c.id) === id);
     if (card) {
       // convert to CardData shape expected by modal
@@ -171,11 +179,27 @@ export default function Home() {
   }
 
   function handleDeleteCard(id: string) {
+    if (!hasPermission('cards:delete')) {
+      toast({ title: "Permissão negada", description: "Você não tem permissão para deletar cards.", variant: "destructive" });
+      return;
+    }
     const numId = parseInt(id);
     if (!Number.isNaN(numId)) deleteCardMutation.mutate(numId);
   }
 
   function handleSaveCard(data: any) {
+    const isEditing = !!editingCard;
+    const requiredPermission = isEditing ? 'cards:edit' : 'cards:create';
+    
+    if (!hasPermission(requiredPermission)) {
+      toast({ 
+        title: "Permissão negada", 
+        description: `Você não tem permissão para ${isEditing ? 'editar' : 'criar'} cards.`, 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     // data comes from modal with id as string for existing, otherwise generated id
     const hasRemoteId = data.id && !String(data.id).match(/^\d{13}/); // heuristic: local generated ids are timestamps
     // Build payload matching InsertCard
@@ -353,23 +377,21 @@ export default function Home() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle className="text-2xl font-semibold">Cards</CardTitle>
-              {user ? (
-                hasPermission('cards:create') ? (
-                  <Button onClick={handleCreateCard}>
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Adicionar Card
-                  </Button>
-                ) : null
-              ) : (
+              {user && hasPermission('cards:create') ? (
+                <Button onClick={handleCreateCard}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Adicionar Card
+                </Button>
+              ) : !user ? (
                 <Button variant="ghost" onClick={() => window.location.href = '/login'}>
                   Entrar
                 </Button>
-              )}
+              ) : null}
               
             </CardHeader>
             <CardContent>
               {cards.length === 0 ? (
-                <EmptyState onCreateClick={handleCreateCard} />
+                <EmptyState onCreateClick={hasPermission('cards:create') ? handleCreateCard : undefined} />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {cards.map((c) => {

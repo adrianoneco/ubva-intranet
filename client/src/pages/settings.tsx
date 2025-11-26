@@ -17,6 +17,47 @@ type ScheduleSettings = {
   availableTo?: string; // ISO date yyyy-mm-dd
 };
 
+const PERMISSION_LABELS: Record<string, string> = {
+  'dashboard:view': 'Ver Dashboard',
+  'cards:view': 'Ver Cards',
+  'cards:create': 'Criar Cards',
+  'cards:edit': 'Editar Cards',
+  'cards:delete': 'Apagar Cards',
+  'tasks:view': 'Ver Tarefas',
+  'tasks:create': 'Criar Tarefas',
+  'tasks:edit': 'Editar Tarefas',
+  'tasks:delete': 'Apagar Tarefas',
+  'contacts:view': 'Ver Contatos',
+  'contacts:create': 'Criar Contatos',
+  'contacts:edit': 'Editar Contatos',
+  'contacts:delete': 'Deletar Contatos',
+  'departments:view': 'Ver Departamentos',
+  'departments:create': 'Criar Departamentos',
+  'departments:edit': 'Editar Departamentos',
+  'departments:delete': 'Deletar Departamentos',
+  'companies:view': 'Ver Empresas',
+  'companies:create': 'Criar Empresas',
+  'companies:edit': 'Editar Empresas',
+  'companies:delete': 'Deletar Empresas',
+  'setor:view': 'Ver Setores',
+  'setor:create': 'Criar Setores',
+  'setor:edit': 'Editar Setores',
+  'setor:delete': 'Deletar Setores',
+  'cargos:view': 'Ver Cargos',
+  'cargos:create': 'Criar Cargos',
+  'cargos:edit': 'Editar Cargos',
+  'cargos:delete': 'Deletar Cargos',
+  'calendar:view': 'Ver Calendário',
+  'calendar:create': 'Criar Eventos',
+  'calendar:edit': 'Editar Eventos',
+  'calendar:delete': 'Remover Eventos',
+  'settings:view': 'Ver Configurações',
+  'settings:edit': 'Editar Configurações',
+  'users:view': 'Ver Usuários',
+  'users:manage': 'Gerenciar Usuários',
+  'groups:manage': 'Gerenciar Grupos',
+};
+
 const STORAGE_KEY = 'schedule.settings.v1';
 
 function defaultSettings(): ScheduleSettings {
@@ -672,44 +713,8 @@ export default function SettingsPage() {
                   </select>
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-2">
-                <div className="text-sm text-muted-foreground">Selecione permissões:</div>
-                {[
-                  'dashboard:view',
-                  'contacts:view',
-                  'contacts:create',
-                  'contacts:edit',
-                  'contacts:delete',
-                  'calendar:view',
-                  'calendar:create',
-                  'calendar:edit',
-                  'calendar:delete',
-                  'settings:view',
-                  'settings:edit',
-                  'users:view',
-                  'users:manage',
-                  'groups:manage'
-                ].map(p => (
-                  <label key={p} className="inline-flex items-center gap-2">
-                    <input type="checkbox" checked={editingUserPerms.includes(p)} onChange={()=>toggleEditingUserPerm(p)} />
-                    <span className="text-sm">{p}</span>
-                  </label>
-                ))}
-                <div className="mt-2 text-sm text-muted-foreground">Permissões do grupo associado:</div>
-                <div className="space-y-1">
-                  {groups.map(g => (
-                    <div key={g.id} className="p-2 rounded border bg-white/3">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium">{g.name}</div>
-                        <div className="text-xs text-muted-foreground">{g.permissions.length} permissões</div>
-                      </div>
-                      <div className="text-xs mt-1 text-muted-foreground">{g.permissions.join(', ') || '— nenhuma —'}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            </div>
+            {/* per-user permissions removed — permissions are derived from the selected group (role) */}
             <DialogFooter>
               <div className="flex gap-2">
                 <Button onClick={handleSaveUser}>Salvar</Button>
@@ -738,10 +743,34 @@ export default function SettingsPage() {
                 <div className="mt-2 space-y-1 max-h-96 overflow-y-auto">
                   {[
                     'dashboard:view',
+                    'cards:view',
+                    'cards:create',
+                    'cards:edit',
+                    'cards:delete',
+                    'tasks:view',
+                    'tasks:create',
+                    'tasks:edit',
+                    'tasks:delete',
                     'contacts:view',
                     'contacts:create',
                     'contacts:edit',
                     'contacts:delete',
+                    'departments:view',
+                    'departments:create',
+                    'departments:edit',
+                    'departments:delete',
+                    'companies:view',
+                    'companies:create',
+                    'companies:edit',
+                    'companies:delete',
+                    'setor:view',
+                    'setor:create',
+                    'setor:edit',
+                    'setor:delete',
+                    'cargos:view',
+                    'cargos:create',
+                    'cargos:edit',
+                    'cargos:delete',
                     'calendar:view',
                     'calendar:create',
                     'calendar:edit',
@@ -758,7 +787,7 @@ export default function SettingsPage() {
                         checked={editingGroupPerms.includes(p)} 
                         onChange={() => toggleEditingGroupPerm(p)} 
                       />
-                      <span className="text-sm">{p}</span>
+                      <span className="text-sm">{PERMISSION_LABELS[p] || p} <span className="text-xs text-muted-foreground">({p})</span></span>
                     </label>
                   ))}
                 </div>

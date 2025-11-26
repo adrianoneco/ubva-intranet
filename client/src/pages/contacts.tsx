@@ -98,10 +98,25 @@ export default function ContactsPage() {
   const { isMobile, open: sidebarOpen } = useSidebar();
   const hasSidebar = !isMobile && !!sidebarOpen;
 
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   React.useEffect(() => {
-    if (!user) setActive('ramais');
-  }, [user]);
+    if (!user) {
+      setActive('ramais');
+      return;
+    }
+    // Check if current active tab is accessible, if not switch to first accessible
+    const availableSections = sections.filter(s => {
+      const viewPermission = s.key === 'ramais' ? 'contacts:view' :
+        s.key === 'departments' ? 'departments:view' :
+        s.key === 'companies' ? 'companies:view' :
+        s.key === 'setor' ? 'setor:view' :
+        s.key === 'cargos' ? 'cargos:view' : 'contacts:view';
+      return hasPermission(viewPermission);
+    });
+    if (availableSections.length > 0 && !availableSections.find(s => s.key === active)) {
+      setActive(availableSections[0].key);
+    }
+  }, [user, hasPermission, active]);
   const { toast } = useToast();
   const DEFAULT_COUNTRY = '+55';
   const csvInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -532,6 +547,17 @@ export default function ContactsPage() {
   }
 
   const modalCanSave = React.useMemo(() => {
+    // Check permission first
+    const isEditing = modalEditingIndex !== null;
+    const permissionKey = active === 'ramais' ? (isEditing ? 'contacts:edit' : 'contacts:create') :
+      active === 'departments' ? (isEditing ? 'departments:edit' : 'departments:create') :
+      active === 'companies' ? (isEditing ? 'companies:edit' : 'companies:create') :
+      active === 'setor' ? (isEditing ? 'setor:edit' : 'setor:create') :
+      active === 'cargos' ? (isEditing ? 'cargos:edit' : 'cargos:create') :
+      (isEditing ? 'contacts:edit' : 'contacts:create');
+    
+    if (!hasPermission(permissionKey)) return false;
+    
     // Allow saving a ramal if either required fields are present OR an image is attached.
     if (active === 'ramais') {
       const digits = (modalPhone || '').replace(/\D/g,'').length;
@@ -539,7 +565,7 @@ export default function ContactsPage() {
       return !!(modalImage || (modalName && hasNumberParts && modalCompany));
     }
     return !!modalName;
-  }, [active, modalName, modalDepartment, modalCompany, modalImage, modalPhone]);
+  }, [active, modalName, modalDepartment, modalCompany, modalImage, modalPhone, modalEditingIndex, hasPermission]);
 
   React.useEffect(() => {
     setName(''); setNumber(''); setSelectedDepartment(''); setSelectedSetor(''); setSelectedCompany(''); setEditingIndex(null); 
@@ -904,12 +930,16 @@ export default function ContactsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {user ? (
+                      {user && (hasPermission('contacts:edit') || hasPermission('contacts:delete')) ? (
                     <>
-                      <Button variant="outline" size="sm" onClick={() => openEditModal(i)}>Editar</Button>
-                      <Button variant="ghost" size="icon" onClick={() => removeItem(i)} aria-label="Remover ramal">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {hasPermission('contacts:edit') && (
+                        <Button variant="outline" size="sm" onClick={() => openEditModal(i)}>Editar</Button>
+                      )}
+                      {hasPermission('contacts:delete') && (
+                        <Button variant="ghost" size="icon" onClick={() => removeItem(i)} aria-label="Remover ramal">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </>
                   ) : null}
                 </div>
@@ -933,12 +963,16 @@ export default function ContactsPage() {
           <Card key={it?.id ?? i} className="p-3 flex items-center justify-between">
             <div className="font-medium truncate">{it.name}</div>
             <div className="flex items-center gap-2">
-              {user ? (
+              {user && (hasPermission('contacts:edit') || hasPermission('contacts:delete')) ? (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => openEditModal(i)}>Editar</Button>
-                  <Button variant="ghost" size="icon" onClick={() => removeItem(i)} aria-label="Remover">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {hasPermission('contacts:edit') && (
+                    <Button variant="outline" size="sm" onClick={() => openEditModal(i)}>Editar</Button>
+                  )}
+                  {hasPermission('contacts:delete') && (
+                    <Button variant="ghost" size="icon" onClick={() => removeItem(i)} aria-label="Remover">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </>
               ) : null}
             </div>
@@ -962,7 +996,14 @@ export default function ContactsPage() {
               <div className="flex items-center justify-between">
                 {user ? (
                   <div className="flex gap-2 flex-wrap">
-                    {sections.map(s => (
+                    {sections.filter(s => {
+                      const viewPermission = s.key === 'ramais' ? 'contacts:view' :
+                        s.key === 'departments' ? 'departments:view' :
+                        s.key === 'companies' ? 'companies:view' :
+                        s.key === 'setor' ? 'setor:view' :
+                        s.key === 'cargos' ? 'cargos:view' : 'contacts:view';
+                      return hasPermission(viewPermission);
+                    }).map(s => (
                       <button
                         key={s.key}
                         onClick={() => setActive(s.key)}
@@ -977,11 +1018,29 @@ export default function ContactsPage() {
                   <div>
                   {user ? (
                     <div className="flex items-center gap-2">
-                      <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e:any)=> handleCsvFile(e.target.files?.[0])} />
-                      <Button variant="outline" size="sm" onClick={openCsvPicker}>Importar CSV</Button>
-                      <Button onClick={openNewModal} className="ml-2">
-                        <Plus className="h-4 w-4 mr-2" /> Novo
-                      </Button>
+                      {(() => {
+                        const createPermission = active === 'ramais' ? 'contacts:create' :
+                          active === 'departments' ? 'departments:create' :
+                          active === 'companies' ? 'companies:create' :
+                          active === 'setor' ? 'setor:create' :
+                          active === 'cargos' ? 'cargos:create' : 'contacts:create';
+                        
+                        if (!hasPermission(createPermission)) return null;
+                        
+                        return (
+                          <>
+                            {active === 'ramais' && (
+                              <>
+                                <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e:any)=> handleCsvFile(e.target.files?.[0])} />
+                                <Button variant="outline" size="sm" onClick={openCsvPicker}>Importar CSV</Button>
+                              </>
+                            )}
+                            <Button onClick={openNewModal} className="ml-2">
+                              <Plus className="h-4 w-4 mr-2" /> Novo
+                            </Button>
+                          </>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <Button variant="ghost" onClick={() => window.location.href = '/login'} className="ml-2">Entrar</Button>

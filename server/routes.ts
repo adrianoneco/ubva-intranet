@@ -9,7 +9,7 @@ import { broadcast, registerSSE } from "./sse";
 import { insertTaskSchema, insertCategorySchema, insertCardSchema } from "@shared/schema";
 import { getCache, setCache, clearCachePattern } from "./redis";
 import { db } from "./db";
-import { users, groups } from "@shared/schema";
+import { users, groups, permissions, groupPermissions } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import crypto from 'crypto';
 
@@ -391,11 +391,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const r of rows) {
         let perms: string[] = [];
         try {
-          if (r.permissions) perms = JSON.parse(r.permissions);
-          if ((!perms || perms.length === 0) && r.role) {
-            const groupsRows: any[] = await db.select().from(groups).where(eq(groups.id, r.role));
-            if (Array.isArray(groupsRows) && groupsRows.length) {
-              perms = groupsRows[0].permissions ? JSON.parse(groupsRows[0].permissions) : [];
+          if (r.role) {
+            if (r.role === 'admin') {
+              const all = await db.select().from(permissions).orderBy(permissions.id);
+              perms = Array.isArray(all) ? all.map((p: any) => p.key) : [];
+            } else {
+              const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, r.role));
+              perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
             }
           }
         } catch (e) { perms = []; }
@@ -416,7 +418,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const email = body.email ? String(body.email).trim() : null;
       const role = String(body.role || 'viewer');
       // Users are linked to groups (role). Ignore per-user permissions; keep empty.
-      const permissions: string[] = [];
 
       // generate a username from email or displayName
       let base = email ? email.split('@')[0] : (displayName ? displayName.toLowerCase().replace(/[^a-z0-9]+/g,'-') : `user${Date.now()}`);
@@ -436,11 +437,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const iterations = 100000;
       const passwordHash = crypto.pbkdf2Sync(pw, salt, iterations, 64, 'sha512').toString('hex');
 
-      const insertRes = await db.insert(users).values({ username, passwordHash, salt, iterations, role, displayName, email, permissions: JSON.stringify(permissions) } as any);
+      const insertRes = await db.insert(users).values({ username, passwordHash, salt, iterations, role, displayName, email } as any);
       // fetch created
       const [created] = await db.select().from(users).where(eq(users.username, username));
       // If the server generated the password (not provided), return it so admin can copy it; otherwise don't return password in response
-      const resp: any = { ok: true, user: { id: created.id, username: created.username, displayName: created.displayName, email: created.email, role: created.role, permissions: created.permissions ? JSON.parse(created.permissions) : [] } };
+      // derive permissions from the user's role/group
+      let derivedPermissions: string[] = [];
+      try {
+        if (created.role) {
+          if (created.role === 'admin') {
+            const permsRows: any[] = await db.select({ key: permissions.key }).from(permissions).orderBy(permissions.id);
+            derivedPermissions = Array.isArray(permsRows) ? permsRows.map((p: any) => p.key) : [];
+          } else {
+            const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, created.role));
+            derivedPermissions = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+          }
+        }
+      } catch (e) { derivedPermissions = []; }
+      const resp: any = { ok: true, user: { id: created.id, username: created.username, displayName: created.displayName, email: created.email, role: created.role, permissions: derivedPermissions } };
       if (!providedPassword) resp.password = pw;
       return res.status(201).json(resp);
     } catch (e) {
@@ -480,7 +494,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.update(users).set(patch).where(eq(users.id, id));
       const [row] = await db.select().from(users).where(eq(users.id, id));
       console.log(`[USER UPDATE] Updated user ${row.username}, has passwordHash: ${!!row.passwordHash}`);
-      return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.displayName, email: row.email, role: row.role, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      // derive permissions from role/group using normalized mappings
+      let updatedPerms: string[] = [];
+      try {
+        if (row.role) {
+          if (row.role === 'admin') {
+            const permsRows: any[] = await db.select({ key: permissions.key }).from(permissions).orderBy(permissions.id);
+            updatedPerms = Array.isArray(permsRows) ? permsRows.map((p: any) => p.key) : [];
+          } else {
+            const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, row.role));
+            updatedPerms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+          }
+        }
+      } catch (e) { updatedPerms = []; }
+      return res.json({ ok: true, user: { id: row.id, username: row.username, displayName: row.displayName || row.displayName, email: row.email, role: row.role, permissions: updatedPerms } });
     } catch (e) {
       console.error('Failed to update user', e);
       return res.status(500).json({ error: 'Failed to update user' });
@@ -504,7 +531,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/groups', requireAuth, async (_req, res) => {
     try {
       const rows: any[] = await db.select().from(groups);
-      const out = rows.map(r => ({ id: r.id, name: r.name, permissions: r.permissions ? JSON.parse(r.permissions) : [] }));
+      const out: any[] = [];
+      for (const g of rows) {
+        try {
+          const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, g.id));
+          const perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+          out.push({ id: g.id, name: g.name, permissions: perms });
+        } catch (e) {
+          out.push({ id: g.id, name: g.name, permissions: [] });
+        }
+      }
       return res.json(out);
     } catch (e) {
       console.error('Failed to fetch groups', e);
@@ -518,10 +554,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const name = String(body.name || '').trim();
       if (!name) return res.status(400).json({ error: 'Missing name' });
       const id = (body.id || name.toLowerCase().replace(/[^a-z0-9]+/g,'-'));
-      const permissions = Array.isArray(body.permissions) ? body.permissions : [];
-      await db.insert(groups).values({ id, name, permissions: JSON.stringify(permissions) } as any);
+      const permissionsBody = Array.isArray(body.permissions) ? body.permissions : [];
+      await db.insert(groups).values({ id, name } as any);
+      // ensure permission keys exist and create mappings
+      for (const key of permissionsBody) {
+        // insert permission if not exists
+        await db.insert(permissions).values({ key }).onConflictDoNothing();
+        // fetch permission id
+        const [p] = await db.select().from(permissions).where(eq(permissions.key, key));
+        if (p) {
+          await db.insert(groupPermissions).values({ groupId: id, permissionId: p.id }).onConflictDoNothing();
+        }
+      }
       const [row] = await db.select().from(groups).where(eq(groups.id, id));
-      return res.status(201).json({ ok: true, group: { id: row.id, name: row.name, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      // return created group with derived permissions
+      const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, id));
+      const perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+      return res.status(201).json({ ok: true, group: { id: row.id, name: row.name, permissions: perms } });
     } catch (e) {
       console.error('Failed to create group', e);
       return res.status(500).json({ error: 'Failed to create group' });
@@ -535,11 +584,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body || {};
       const patch: any = {};
       if (body.name !== undefined) patch.name = body.name;
-      if (body.permissions !== undefined) patch.permissions = JSON.stringify(Array.isArray(body.permissions) ? body.permissions : []);
-      if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nothing to update' });
-      await db.update(groups).set(patch).where(eq(groups.id, id));
+      if (Object.keys(patch).length === 0 && body.permissions === undefined) return res.status(400).json({ error: 'Nothing to update' });
+      if (Object.keys(patch).length > 0) await db.update(groups).set(patch).where(eq(groups.id, id));
+
+      if (body.permissions !== undefined) {
+        const newPerms: string[] = Array.isArray(body.permissions) ? body.permissions : [];
+        // replace mappings: delete existing and insert new
+        await db.delete(groupPermissions).where(eq(groupPermissions.groupId, id));
+        for (const key of newPerms) {
+          await db.insert(permissions).values({ key }).onConflictDoNothing();
+          const [p] = await db.select().from(permissions).where(eq(permissions.key, key));
+          if (p) await db.insert(groupPermissions).values({ groupId: id, permissionId: p.id }).onConflictDoNothing();
+        }
+      }
+
       const [row] = await db.select().from(groups).where(eq(groups.id, id));
-      return res.json({ ok: true, group: { id: row.id, name: row.name, permissions: row.permissions ? JSON.parse(row.permissions) : [] } });
+      const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, id));
+      const perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+      return res.json({ ok: true, group: { id: row.id, name: row.name, permissions: perms } });
     } catch (e) {
       console.error('Failed to update group', e);
       return res.status(500).json({ error: 'Failed to update group' });
@@ -551,8 +613,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = String(req.params.id || '');
       if (!id) return res.status(400).json({ error: 'Missing id' });
       await db.delete(groups).where(eq(groups.id, id));
-      // reset users with this role to viewer
-      await db.update(users).set({ role: 'viewer', permissions: JSON.stringify([]) } as any).where(eq(users.role, id));
+      // reset users with this role to viewer (clear role only)
+      await db.update(users).set({ role: 'viewer' } as any).where(eq(users.role, id));
       return res.json({ ok: true });
     } catch (e) {
       console.error('Failed to delete group', e);
@@ -617,25 +679,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function requirePermission(permission: string) {
     return async (req: any, res: any, next: any) => {
       try {
-        // admins bypass checks
-        if (req.user && req.user.role === 'admin') return next();
+        // If the user is in the admin role, grant all permissions immediately
+        try {
+          if (req.user && req.user.role === 'admin') return next();
+        } catch (e) {}
 
         // try permissions on req.user first
         let perms: string[] | undefined = undefined;
         if (req.user && Array.isArray(req.user.permissions)) perms = req.user.permissions;
 
-        // if not present, try to load from DB when we have a user id
-        if ((!perms || perms.length === 0) && req.user && req.user.id) {
-          try {
-            const rows: any[] = await db.select().from(users).where(eq(users.id, req.user.id));
-            if (Array.isArray(rows) && rows.length) {
-              const p = rows[0].permissions;
-              perms = p ? JSON.parse(p) : [];
+          // if not present, derive permissions from the user's group/role using normalized tables
+          if ((!perms || perms.length === 0) && req.user) {
+            try {
+              // try to resolve role from session user object or DB (prefer session)
+              let role: string | undefined = undefined;
+              if (req.user.role) role = req.user.role;
+              else if (req.user.id) {
+                const [uRow] = await db.select({ role: users.role }).from(users).where(eq(users.id, req.user.id));
+                if (uRow) role = uRow.role;
+              } else if (req.user.username) {
+                const [uRow] = await db.select({ role: users.role }).from(users).where(eq(users.username, req.user.username));
+                if (uRow) role = uRow.role;
+              }
+
+              if (role) {
+                if (role === 'admin') {
+                  const permsRows: any[] = await db.select({ key: permissions.key }).from(permissions).orderBy(permissions.id);
+                  perms = permsRows.map((p: any) => p.key);
+                } else {
+                  const gpRows: any[] = await db.select({ key: permissions.key }).from(permissions).innerJoin(groupPermissions, eq(groupPermissions.permissionId, permissions.id)).where(eq(groupPermissions.groupId, role));
+                  perms = Array.isArray(gpRows) ? gpRows.map((p: any) => p.key) : [];
+                }
+              }
+            } catch (e) {
+              // ignore DB error and fall through to forbidden
             }
-          } catch (e) {
-            // ignore DB error and fall through to forbidden
           }
-        }
 
         if (Array.isArray(perms) && perms.includes(permission)) return next();
         return res.status(403).json({ error: 'Forbidden' });

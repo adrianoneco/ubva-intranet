@@ -4,7 +4,7 @@ import MemoryStore from "memorystore";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from './db';
-import { users, groups } from '@shared/schema';
+import { users, groups, permissions as permTable, groupPermissions as gpTable } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { registerRoutes } from "./routes";
@@ -66,12 +66,16 @@ passport.use(new LocalStrategy((username, password, done) => {
           // Resolve permissions from user's explicit permissions or their group
           let permissions: string[] = [];
           try {
-            if (user.permissions) permissions = JSON.parse(user.permissions);
-            if ((!permissions || permissions.length === 0) && user.role) {
-              const rows = await db.select().from(groups).where(eq(groups.id, user.role));
-              if (Array.isArray(rows) && rows.length) {
-                const gp = rows[0].permissions;
-                permissions = gp ? JSON.parse(gp) : [];
+            // derive permissions from normalized permissions tables
+            if (user.role) {
+              if (user.role === 'admin') {
+                // admin: return all known permissions
+                const permsRows = await db.select().from(permTable).orderBy(permTable.id);
+                permissions = permsRows.map((p: any) => p.key);
+              } else {
+                // lookup via group_permissions join
+                const rows = await db.select({ key: permTable.key }).from(permTable).innerJoin(gpTable, eq(gpTable.permissionId, permTable.id)).where(eq(gpTable.groupId, user.role));
+                permissions = Array.isArray(rows) ? rows.map((r: any) => r.key) : [];
               }
             }
           } catch (e) {
@@ -94,13 +98,18 @@ passport.deserializeUser((id: any, done) => {
     if (!user) return done(null, false);
     try {
       let permissions: string[] = [];
-      if (user.permissions) permissions = user.permissions ? JSON.parse(user.permissions) : [];
-      if ((!permissions || permissions.length === 0) && user.role) {
-        const grows = await db.select().from(groups).where(eq(groups.id, user.role));
-        if (Array.isArray(grows) && grows.length) {
-          const gp = grows[0].permissions;
-          permissions = gp ? JSON.parse(gp) : [];
+      try {
+        if (user.role) {
+          if (user.role === 'admin') {
+            const permsRows = await db.select().from(permTable).orderBy(permTable.id);
+            permissions = permsRows.map((p: any) => p.key);
+          } else {
+            const rows = await db.select({ key: permTable.key }).from(permTable).innerJoin(gpTable, eq(gpTable.permissionId, permTable.id)).where(eq(gpTable.groupId, user.role));
+            permissions = Array.isArray(rows) ? rows.map((r: any) => r.key) : [];
+          }
         }
+      } catch (e) {
+        permissions = [];
       }
       return done(null, { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.displayName || null, email: user.email || null, permissions });
     } catch (e) {

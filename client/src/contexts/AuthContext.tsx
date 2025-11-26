@@ -74,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hasPermission = React.useCallback((permission: string) => {
     if (!user) return false;
+    // Admin role should have all permissions
     if (user.role === 'admin') return true;
     return user.permissions?.includes(permission) || false;
   }, [user]);
