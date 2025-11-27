@@ -1,0 +1,3 @@
+[build]
+outdir = "/root/app-intranet"
+entrypoints = ["server/index.ts"]
