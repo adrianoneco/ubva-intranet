@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Trash2, Edit3, Search, SortAsc, SortDesc, Upload } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -17,10 +18,12 @@ type Pickup = {
   id: string;
   date: string; // ISO date
   time?: string; // HH:MM
-  status?: 'agendado' | 'confirmado' | 'entregue' | 'cancelado';
+  status?: 'agendado' | 'confirmado' | 'entregue' | 'cancelado' | 'oe-gerada';
   clientId: string;
   clientName: string;
   orderId: string;
+  oeNumber?: string; // Número da Ordem de Entrega
+  cancelReason?: string; // Motivo do cancelamento
   userId?: number; // who created (user id)
   userDisplayName?: string; // display name of creator
     createdAt: string;
@@ -105,10 +108,14 @@ export default function AgendamentoPage() {
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalClientId, setModalClientId] = React.useState('');
   const [modalClientName, setModalClientName] = React.useState('');
+  const [modalOeNumber, setModalOeNumber] = React.useState('');
+  const [modalOeTags, setModalOeTags] = React.useState<string[]>([]);
+  const [modalOeInput, setModalOeInput] = React.useState('');
   const [modalOrderId, setModalOrderId] = React.useState('');
   const [modalOrderTags, setModalOrderTags] = React.useState<string[]>([]);
   const [modalOrderInput, setModalOrderInput] = React.useState('');
-  const [modalStatus, setModalStatus] = React.useState<'agendado' | 'confirmado' | 'entregue' | 'cancelado'>('agendado');
+  const [modalStatus, setModalStatus] = React.useState<'agendado' | 'confirmado' | 'entregue' | 'cancelado' | 'oe-gerada'>('agendado');
+  const [modalCancelReason, setModalCancelReason] = React.useState('');
   // tri-state: null = show both on small screens, true = show calendar only, false = show slots only
   const [showCalendarOnMobile, setShowCalendarOnMobile] = React.useState<boolean | null>(null);
   // Filter and sort states
@@ -119,8 +126,10 @@ export default function AgendamentoPage() {
 
   function resetForm() {
     setDate(''); setTime(''); setClientId(''); setClientName(''); setOrderId('');
-    setModalClientId(''); setModalClientName(''); setModalOrderId('');
+    setModalClientId(''); setModalClientName(''); setModalOeNumber(''); setModalOrderId('');
+    setModalOeTags([]); setModalOeInput('');
     setModalOrderTags([]); setModalOrderInput(''); setModalStatus('agendado');
+    setModalCancelReason('');
   }
 
   function normalizeDate(d: string) { return d; }
@@ -232,9 +241,11 @@ export default function AgendamentoPage() {
 
   function openModalFor(slot: string) {
     setTime(slot);
-    setModalClientId(''); setModalClientName(''); setModalOrderId('');
+    setModalClientId(''); setModalClientName(''); setModalOeNumber(''); setModalOrderId('');
     setModalStatus('agendado');
+    setModalOeTags([]); setModalOeInput('');
     setModalOrderTags([]); setModalOrderInput('');
+    setModalCancelReason('');
     setModalOpen(true);
   }
 
@@ -248,8 +259,8 @@ export default function AgendamentoPage() {
 
   async function handleModalSave() {
     const useDate = selectedDate || date;
-    if (!useDate || !time || !modalClientId || modalOrderTags.length === 0) {
-      toast({ title: 'Validação', description: 'Preencha data, horário, clientId e pedido(s)' });
+    if (!useDate || !time || !modalClientId || modalOeTags.length === 0 || modalOrderTags.length === 0) {
+      toast({ title: 'Validação', description: 'Preencha data, horário, cliente, OE e pedido(s)' });
       return;
     }
     // when editing, ignore conflict with the item being edited
@@ -267,8 +278,10 @@ export default function AgendamentoPage() {
           time,
           clientId: modalClientId,
           clientName: modalClientName,
+          oeNumber: modalOeTags.join(','),
           orderId: modalOrderTags.join(','),
           status: modalStatus,
+          cancelReason: modalStatus === 'cancelado' ? modalCancelReason : undefined,
           scheduledAt,
         }
       });
@@ -286,8 +299,10 @@ export default function AgendamentoPage() {
         time: time,
         clientId: modalClientId,
         clientName: modalClientName,
+        oeNumber: modalOeTags.join(','),
         status: modalStatus || 'agendado',
         orderId: modalOrderTags.join(','),
+        cancelReason: modalStatus === 'cancelado' ? modalCancelReason : undefined,
         userId: user ? (user as any).id : undefined,
         userDisplayName: user ? ((user as any).displayName || (user as any).username || 'Usuário') : 'Anônimo',
         createdAt: new Date().toISOString(),
@@ -304,11 +319,16 @@ export default function AgendamentoPage() {
     setEditingId(it.id);
     setModalClientId(it.clientId);
     setModalClientName(it.clientName);
+    setModalOeNumber(it.oeNumber || '');
+    setModalOeInput('');
+    setModalOeTags(it.oeNumber ? it.oeNumber.split(',').map(s=>s.trim()).filter(Boolean) : []);
     setModalOrderId(it.orderId);
+    setModalOrderInput('');
     setModalOrderTags(it.orderId ? it.orderId.split(',').map(s=>s.trim()).filter(Boolean) : []);
     setSelectedDate(it.date);
     setTime(it.time || '');
     setModalStatus(it.status || 'agendado');
+    setModalCancelReason(it.cancelReason || '');
     setModalOpen(true);
   }
 
@@ -555,6 +575,10 @@ export default function AgendamentoPage() {
                       <span className="text-xs text-muted-foreground">Agendado</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded bg-blue-600" />
+                      <span className="text-xs text-muted-foreground">OE Gerada</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <span className="inline-block h-3 w-3 rounded bg-lime-600" />
                       <span className="text-xs text-muted-foreground">Separado</span>
                     </div>
@@ -736,6 +760,7 @@ export default function AgendamentoPage() {
                             case 'confirmado': return 'bg-lime-600';
                             case 'entregue': return 'bg-emerald-600';
                             case 'cancelado': return 'bg-red-600';
+                            case 'oe-gerada': return 'bg-blue-600';
                             default: return 'bg-purple-600';
                           }
                         };
@@ -821,6 +846,7 @@ export default function AgendamentoPage() {
                       <SelectItem value="agendado">Agendado</SelectItem>
                       <SelectItem value="confirmado">Confirmado</SelectItem>
                       <SelectItem value="entregue">Entregue</SelectItem>
+                      <SelectItem value="oe-gerada">OE Gerada</SelectItem>
                       <SelectItem value="cancelado">Cancelado</SelectItem>
                     </SelectContent>
                   </Select>
@@ -878,12 +904,16 @@ export default function AgendamentoPage() {
                             bookingIsExpired = false;
                           }
 
+                          // Admin can edit expired bookings
+                          const isAdmin = user && (user as any).role === 'admin';
+                          const canEdit = isAdmin || !bookingIsExpired;
+
                           return (
                             <div key={it.id} className={`group relative flex items-start justify-between bg-muted dark:bg-white/5 p-3 pl-6 pr-3 rounded text-sm border border-transparent dark:border-white/5 ${bookingIsExpired ? 'opacity-60' : ''}`}>
                               {/* left status indicator */}
                               {(() => {
                                 const s = it.status || 'agendado';
-                                const cls = s === 'confirmado' ? 'bg-lime-600' : s === 'entregue' ? 'bg-emerald-600' : s === 'cancelado' ? 'bg-red-600' : 'bg-purple-600';
+                                const cls = s === 'confirmado' ? 'bg-lime-600' : s === 'entregue' ? 'bg-emerald-600' : s === 'cancelado' ? 'bg-red-600' : s === 'oe-gerada' ? 'bg-blue-600' : 'bg-purple-600';
                                 return <div className={`absolute left-2 top-3 bottom-3 w-1.5 rounded ${cls}`} />;
                               })()}
 
@@ -897,10 +927,10 @@ export default function AgendamentoPage() {
                               <div className="flex items-start gap-3">
                                 {/* action buttons on the side */}
                                 <div className="flex items-center gap-1 mt-1">
-                                  <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label="Editar" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
+                                  <Button variant="ghost" size="icon" onClick={() => openEdit(it)} aria-label="Editar" disabled={!canEdit} className={!canEdit ? 'cursor-not-allowed' : ''}>
                                     <Edit3 className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => handleDelete(it.id)} aria-label="Remover" disabled={bookingIsExpired} className={bookingIsExpired ? 'cursor-not-allowed' : ''}>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDelete(it.id)} aria-label="Remover" disabled={!canEdit} className={!canEdit ? 'cursor-not-allowed' : ''}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -911,7 +941,7 @@ export default function AgendamentoPage() {
                                     {it.time || '-'}
                                   </div>
                                   {/* status badge below time */}
-                                  <div className={`px-2 py-1 rounded text-white text-xs whitespace-nowrap ${it.status === 'confirmado' ? 'bg-lime-600' : it.status === 'entregue' ? 'bg-emerald-600' : it.status === 'cancelado' ? 'bg-red-600' : 'bg-purple-600'}`}>{it.status || 'agendado'}</div>
+                                  <div className={`px-2 py-1 rounded text-white text-xs whitespace-nowrap ${it.status === 'confirmado' ? 'bg-lime-600' : it.status === 'entregue' ? 'bg-emerald-600' : it.status === 'cancelado' ? 'bg-red-600' : it.status === 'oe-gerada' ? 'bg-blue-600' : 'bg-purple-600'}`}>{it.status === 'oe-gerada' ? 'OE Gerada' : it.status || 'agendado'}</div>
                                 </div>
                               </div>
                             </div>
@@ -978,80 +1008,118 @@ export default function AgendamentoPage() {
               <DialogTitle>Agendar Retirada</DialogTitle>
               <DialogDescription>{formatDateTime(selectedDate || date, time)}</DialogDescription>
             </DialogHeader>
-                <div className="grid grid-cols-1 gap-2">
-                  {editingId ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-center">Data</Label>
-                        <Input
-                          type="date"
-                          value={selectedDate || date}
-                          min={isoDateLocal(new Date())}
-                          onChange={(e:any)=>{
-                            const v = e.target.value;
-                            setSelectedDate(v);
-                            // if current time becomes invalid for new date, clear it
-                            if (time) {
-                              const occupiedNow = pickups.some(p => p.id !== editingId && p.date === v && p.time === time);
-                              const [y, m, d] = (v||'').split('-').map(Number);
-                              const [hh, mm] = (time||'00:00').split(':').map(Number);
-                              const slotDt = new Date(y, (m||1)-1, d, hh, mm, 0);
-                              if (occupiedNow || slotDt.getTime() <= Date.now()) setTime('');
-                            }
-                          }}
-                          className="[color-scheme:dark]"
-                          style={{ colorScheme: 'dark' }}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-center">Horário</Label>
-                        <Select value={time} onValueChange={setTime}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="— selecione —" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {generateTimeSlots().filter(s => {
-                              const useDate = selectedDate || date;
-                              const occupied = useDate ? pickups.some(p => p.id !== editingId && p.date === useDate && p.time === s) : false;
-                              let isPast = false;
-                              if (useDate) {
-                                try {
-                                  const [y, m, d] = (useDate||'').split('-').map(Number);
-                                  const [hh, mm] = s.split(':').map(Number);
-                                  const slotDt = new Date(y, (m||1)-1, d, hh, mm, 0);
-                                  if (slotDt.getTime() < Date.now()) isPast = true;
-                                } catch (e) { isPast = false; }
-                              }
-                              return !occupied && !isPast;
-                            }).map(s => (
-                              <SelectItem key={s} value={s}>{s}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-center">Status</Label>
-                        <Select value={modalStatus} onValueChange={(v: any) => setModalStatus(v)}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="agendado">Agendado</SelectItem>
-                            <SelectItem value="confirmado">Confirmado</SelectItem>
-                            <SelectItem value="entregue">Entregue</SelectItem>
-                            <SelectItem value="cancelado">Cancelado</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  ) : null}
-              <div>
-                <Label className="text-center">Cliente</Label>
-                <Input placeholder="ex. 123" value={modalClientId} onChange={(e:any)=>setModalClientId(e.target.value)} />
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-center">Data</Label>
+                  <Input
+                    type="date"
+                    value={selectedDate || date}
+                    min={isoDateLocal(new Date())}
+                    onChange={(e:any)=>{
+                      const v = e.target.value;
+                      setSelectedDate(v);
+                      // if current time becomes invalid for new date, clear it
+                      if (time) {
+                        const occupiedNow = pickups.some(p => p.id !== editingId && p.date === v && p.time === time);
+                        const [y, m, d] = (v||'').split('-').map(Number);
+                        const [hh, mm] = (time||'00:00').split(':').map(Number);
+                        const slotDt = new Date(y, (m||1)-1, d, hh, mm, 0);
+                        if (occupiedNow || slotDt.getTime() <= Date.now()) setTime('');
+                      }
+                    }}
+                    className="[color-scheme:dark]"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+                <div>
+                  <Label className="text-center">Horário</Label>
+                  <Select value={time} onValueChange={setTime}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="— selecione —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {generateTimeSlots().filter(s => {
+                        const useDate = selectedDate || date;
+                        const occupied = useDate ? pickups.some(p => p.id !== editingId && p.date === useDate && p.time === s) : false;
+                        let isPast = false;
+                        if (useDate) {
+                          try {
+                            const [y, m, d] = (useDate||'').split('-').map(Number);
+                            const [hh, mm] = s.split(':').map(Number);
+                            const slotDt = new Date(y, (m||1)-1, d, hh, mm, 0);
+                            if (slotDt.getTime() < Date.now()) isPast = true;
+                          } catch (e) { isPast = false; }
+                        }
+                        return !occupied && !isPast;
+                      }).map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-center">Cliente</Label>
+                  <Input placeholder="ex. 123" value={modalClientId} onChange={(e:any)=>setModalClientId(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-center">Nome do Cliente <span className="text-xs text-muted-foreground">(opcional)</span></Label>
+                  <Input placeholder="ex. João Silva (opcional)" value={modalClientName} onChange={(e:any)=>setModalClientName(e.target.value)} />
+                </div>
               </div>
               <div>
-                <Label className="text-center">Nome do Cliente <span className="text-xs text-muted-foreground">(opcional)</span></Label>
-                <Input placeholder="ex. João Silva (opcional)" value={modalClientName} onChange={(e:any)=>setModalClientName(e.target.value)} />
+                <Label className="text-center">Número(s) OE</Label>
+                <div className="mt-1 flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {modalOeTags.map((t, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">
+                        <span className="font-medium">{t}</span>
+                        <button type="button" onClick={() => setModalOeTags(modalOeTags.filter((_,i)=>i!==idx))} className="text-xs text-white/80 hover:text-white">✕</button>
+                      </span>
+                    ))}
+                  </div>
+                  <Input
+                    className="w-full"
+                    placeholder="Digite o número da OE e pressione Enter"
+                    value={modalOeInput}
+                    onChange={(e:any)=>{
+                      const v = e.target.value;
+                      if (v.includes(',')) {
+                        const parts = v.split(',').map((s:string)=>s.trim()).filter(Boolean);
+                        const next = [...modalOeTags];
+                        for (const p of parts) if (!next.includes(p)) next.push(p);
+                        setModalOeTags(next);
+                        setModalOeInput('');
+                        return;
+                      }
+                      setModalOeInput(v);
+                    }}
+                    onKeyDown={(e:any)=>{
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const v = (modalOeInput||'').trim().replace(/,$/, '');
+                        if (!v) return;
+                        if (!modalOeTags.includes(v)) setModalOeTags([...modalOeTags, v]);
+                        setModalOeInput('');
+                      } else if (e.key === ',') {
+                        e.preventDefault();
+                        const v = (modalOeInput||'').trim();
+                        if (!v) return;
+                        if (!modalOeTags.includes(v)) setModalOeTags([...modalOeTags, v]);
+                        setModalOeInput('');
+                      }
+                    }}
+                    onBlur={() => {
+                      const v = (modalOeInput||'').trim().replace(/,$/, '');
+                      if (v && !modalOeTags.includes(v)) {
+                        setModalOeTags([...modalOeTags, v]);
+                        setModalOeInput('');
+                      }
+                    }}
+                  />
+                </div>
               </div>
               <div>
                 <Label className="text-center">Pedido(s)</Label>
@@ -1070,7 +1138,6 @@ export default function AgendamentoPage() {
                     value={modalOrderInput}
                     onChange={(e:any)=>{
                       const v = e.target.value;
-                      // if user types a comma, split and add tags
                       if (v.includes(',')) {
                         const parts = v.split(',').map((s:string)=>s.trim()).filter(Boolean);
                         const next = [...modalOrderTags];
@@ -1097,7 +1164,6 @@ export default function AgendamentoPage() {
                       }
                     }}
                     onBlur={() => {
-                      // Adiciona automaticamente ao sair do campo se houver texto
                       const v = (modalOrderInput||'').trim().replace(/,$/, '');
                       if (v && !modalOrderTags.includes(v)) {
                         setModalOrderTags([...modalOrderTags, v]);
@@ -1107,6 +1173,33 @@ export default function AgendamentoPage() {
                   />
                 </div>
               </div>
+              <div>
+                <Label className="text-center">Status</Label>
+                <Select value={modalStatus} onValueChange={(v: any) => setModalStatus(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="agendado">Agendado</SelectItem>
+                    <SelectItem value="oe-gerada">OE Gerada</SelectItem>
+                    <SelectItem value="confirmado">Separado</SelectItem>
+                    <SelectItem value="entregue">Entregue</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {modalStatus === 'cancelado' && (
+                <div>
+                  <Label className="text-center">Motivo do Cancelamento <span className="text-xs text-muted-foreground">(opcional)</span></Label>
+                  <Textarea 
+                    placeholder="Explique o motivo do cancelamento..."
+                    value={modalCancelReason}
+                    onChange={(e) => setModalCancelReason(e.target.value)}
+                    rows={3}
+                    className="resize-none"
+                  />
+                </div>
+              )}
             </div>
           <DialogFooter>
             <div className="flex gap-2">

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Trash2, Edit3, Settings, Users } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -488,9 +489,14 @@ export default function SettingsPage() {
                       <div className="grid grid-cols-1 gap-4">
                         <div>
                           <Label>Intervalo (min)</Label>
-                          <select value={String(settings.interval)} onChange={(e)=>setSettings(s=>({ ...s, interval: Number(e.target.value)}))} className="mt-1 block w-32 rounded border p-2">
-                            {[5,10,15,30,60].map(n=> <option key={n} value={n}>{n} minutos</option>)}
-                          </select>
+                          <Select value={String(settings.interval)} onValueChange={(v)=>setSettings(s=>({ ...s, interval: Number(v)}))}>
+                            <SelectTrigger className="w-32 mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[5,10,15,30,60].map(n=> <SelectItem key={n} value={String(n)}>{n} minutos</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -703,14 +709,19 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <Label>Role (Grupo)</Label>
-                  <select value={editingUserRole} onChange={(e:any)=>{
-                    const val = e.target.value; setEditingUserRole(val);
+                  <Select value={editingUserRole} onValueChange={(val:string)=>{
+                    setEditingUserRole(val);
                     // apply group permissions when selecting a known group
                     const g = groups.find(x => x.id === val);
                     if (g) setEditingUserPerms(g.permissions || []);
-                  }} className="mt-1 block w-full rounded border p-2">
-                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
+                  }}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

@@ -339,7 +339,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: data.status || 'agendado',
         clientId: data.clientId,
         clientName: data.clientName || null,
+        oeNumber: data.oeNumber || null,
         orderId: data.orderId || null,
+        cancelReason: data.cancelReason || null,
         userId: user?.id || null,
         userDisplayName: data.userDisplayName || user?.displayName || user?.username || null,
         scheduledAt: data.scheduledAt || (data.date && data.time ? new Date(`${data.date}T${data.time}:00`) : null),
@@ -375,7 +377,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: data.status || 'agendado',
             clientId: data.clientId,
             clientName: data.clientName || null,
+            oeNumber: data.oeNumber || null,
             orderId: data.orderId || null,
+            cancelReason: data.cancelReason || null,
             userId: user?.id || null,
             userDisplayName: data.userDisplayName || user?.displayName || user?.username || null,
             scheduledAt: data.scheduledAt || (data.date && data.time ? new Date(`${data.date}T${data.time}:00`) : null),
@@ -406,7 +410,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status !== undefined) updateData.status = data.status;
       if (data.clientId !== undefined) updateData.clientId = data.clientId;
       if (data.clientName !== undefined) updateData.clientName = data.clientName;
+      if (data.oeNumber !== undefined) updateData.oeNumber = data.oeNumber;
       if (data.orderId !== undefined) updateData.orderId = data.orderId;
+      if (data.cancelReason !== undefined) updateData.cancelReason = data.cancelReason;
       if (data.scheduledAt !== undefined) updateData.scheduledAt = data.scheduledAt;
 
       await db.update(pickups).set(updateData).where(eq(pickups.id, id));
