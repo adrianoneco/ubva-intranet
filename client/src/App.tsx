@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { EditableCard } from "@/components/editable-card";
 import CardEditorModal, { CardData } from "@/components/card-editor-modal";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { SSLWarningModal } from "@/components/ssl-warning-modal";
 import type { Card as CardType } from "@shared/schema";
 import { Globe, LogOut } from "lucide-react";
 
@@ -326,6 +327,7 @@ function App() {
   if (location.startsWith('/login')) {
     return (
       <>
+        <SSLWarningModal />
         <TooltipProvider>
           {content}
           <Toaster />
@@ -336,6 +338,7 @@ function App() {
 
   return (
     <>
+      <SSLWarningModal />
       <TooltipProvider>
         <SidebarProvider style={style as React.CSSProperties}>
         <div className="flex h-screen w-full">
